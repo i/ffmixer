@@ -10,6 +10,7 @@
   import Knob from './Knob.svelte'
   import LevelReadout from './LevelReadout.svelte'
   import Meter from './Meter.svelte'
+  import SettingsButton from './SettingsButton.svelte'
 
   interface Props {
     strip: StripView
@@ -23,6 +24,15 @@
 
   const silencedBySolo = $derived(soloActive && !strip.soloed)
   const pair = $derived(Math.floor(strip.channel / 2))
+
+  function setPhase(side: number): void {
+    send({
+      type: 'setPhase',
+      kind: strip.kind,
+      channel: strip.channel + side,
+      value: !strip.phase[side],
+    })
+  }
 </script>
 
 <div class="strip-group">
@@ -60,20 +70,7 @@
         label={`${strip.name} to ${target}`}
         onchange={(db) => send({ type: 'setSendGain', kind: strip.kind, channel: strip.channel, db })}
       />
-      <button
-        class="icon"
-        class:open={settingsOpen}
-        title="Channel settings"
-        aria-expanded={settingsOpen}
-        onclick={() => (settingsOpen = !settingsOpen)}
-      >
-        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M10.8 1a4.2 4.2 0 0 0-3.9 5.7L1.4 12.2a1.4 1.4 0 0 0 2 2l5.5-5.5A4.2 4.2 0 0 0 14.6 5l-2.4 2.4-2.3-.6-.6-2.3L11.7 2A4.2 4.2 0 0 0 10.8 1z"
-          />
-        </svg>
-      </button>
+      <SettingsButton open={settingsOpen} ontoggle={() => (settingsOpen = !settingsOpen)} />
     </div>
     <div class="gain" class:off={strip.gainDb === null}>{formatGain(strip.gainDb)}</div>
     <div class="route" class:off={strip.gainDb === null} title={`Routing: ${target}`}>{target}</div>
@@ -85,17 +82,51 @@
       <button
         class="toggle wide"
         aria-pressed={strip.stereo}
+        title="Stereo or two mono channels"
         onclick={() => send({ type: 'setStereo', kind: strip.kind, pair, value: !strip.stereo })}
       >Stereo</button>
+      {#if strip.stereo}
+        <Knob
+          value={strip.width}
+          label={`Width ${strip.name}`}
+          format={(width) => width.toFixed(2)}
+          resetValue={1}
+          onchange={(width) => send({ type: 'setWidth', kind: strip.kind, pair, width })}
+        />
+        <div class="settings-caption">Width</div>
+        <button
+          class="toggle wide"
+          aria-pressed={strip.msProc}
+          title="M/S processing: mid to the left channel, side to the right (all routings)"
+          onclick={() => send({ type: 'setMsProc', kind: strip.kind, pair, value: !strip.msProc })}
+        >MS Proc</button>
+        <div class="phase-pair">
+          <button
+            class="toggle phase"
+            aria-pressed={strip.phase[0]}
+            title="Phase L: invert the left channel (all routings)"
+            onclick={() => setPhase(0)}
+          >Ø L</button>
+          <button
+            class="toggle phase"
+            aria-pressed={strip.phase[1]}
+            title="Phase R: invert the right channel (all routings)"
+            onclick={() => setPhase(1)}
+          >R Ø</button>
+        </div>
+      {:else}
+        <button
+          class="toggle wide phase"
+          aria-pressed={strip.phase[0]}
+          title="Phase: invert this channel (all routings)"
+          onclick={() => setPhase(0)}
+        >Ø Phase</button>
+      {/if}
     </div>
   {/if}
 </div>
 
 <style>
-  .strip-group {
-    display: flex;
-    flex-shrink: 0;
-  }
   .strip {
     display: flex;
     flex-direction: column;
@@ -138,9 +169,6 @@
     gap: 3px;
     align-items: stretch;
   }
-  .body .icon {
-    align-self: flex-end;
-  }
   .gain,
   .route {
     font-size: 10px;
@@ -160,18 +188,5 @@
   }
   .off {
     color: var(--text-dim);
-  }
-  .settings {
-    width: 72px;
-    padding: 6px 5px;
-    background: var(--panel);
-    border-right: 1px solid var(--strip-edge);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .settings-title {
-    font-size: 11px;
-    color: var(--text);
   }
 </style>

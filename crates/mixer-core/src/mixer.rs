@@ -2,9 +2,10 @@
 //!
 //! There is no channel fader. Every source strip (hardware input or
 //! software playback, mono or stereo) has one send — gain plus pan — to
-//! each of the 14 stereo hardware outputs. Mute, solo, pan and stereo
-//! linking exist only here; [`Mixer::render`] turns them into the plain
-//! per-crosspoint gains the hardware stores.
+//! each of the 14 stereo hardware outputs. Mute, solo, pan, stereo
+//! linking, width, M/S processing and phase exist only here;
+//! [`Mixer::render`] turns them into the plain per-crosspoint gains the
+//! hardware stores.
 
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +43,11 @@ pub struct Source {
 pub struct SourceBank {
     /// Whether channel pair `p` (channels `2p`, `2p+1`) is one stereo strip.
     pub stereo: [bool; PAIRS],
+    /// Stereo width per pair (manual §25.3): 1 = normal, 0 = mono,
+    /// −1 = left and right swapped. Only used while the pair is stereo.
+    pub width: [f64; PAIRS],
+    /// M/S processing per pair (manual §27.6). Only used while stereo.
+    pub ms_proc: [bool; PAIRS],
     pub channels: [Source; CHANNELS],
 }
 
@@ -49,6 +55,8 @@ impl Default for SourceBank {
     fn default() -> Self {
         Self {
             stereo: [true; PAIRS],
+            width: [1.0; PAIRS],
+            ms_proc: [false; PAIRS],
             channels: std::array::from_fn(|_| Source::default()),
         }
     }
@@ -61,6 +69,10 @@ pub struct Output {
     pub volume: f64,
     pub balance: f64,
     pub muted: bool,
+    /// Phase L / Phase R. The FF800 drivers expose no output inverters,
+    /// so this inverts every crosspoint feeding that output channel,
+    /// which sounds identical.
+    pub phase_inverted: [bool; 2],
 }
 
 impl Default for Output {
@@ -69,6 +81,7 @@ impl Default for Output {
             volume: 1.0,
             balance: 0.0,
             muted: false,
+            phase_inverted: [false; 2],
         }
     }
 }
@@ -295,7 +308,8 @@ impl Mixer {
     /// Switches a channel pair between one stereo strip and two mono
     /// strips, keeping the sound as close as possible (manual §25.3/§25.6):
     /// splitting pans the two halves hard left and right; joining keeps
-    /// the louder gain and centres the balance.
+    /// the louder gain and centres the balance. Width and M/S processing
+    /// reset, since mono strips have neither.
     pub fn set_stereo(
         &mut self,
         kind: SourceKind,
@@ -333,6 +347,58 @@ impl Mixer {
             bank.channels[right_index] = right;
         }
         bank.stereo[pair] = stereo;
+        bank.width[pair] = 1.0;
+        bank.ms_proc[pair] = false;
+        Ok(())
+    }
+
+    /// Phase L / Phase R (or Phase, for a mono strip). Any channel may be
+    /// addressed, including the right side of a stereo strip.
+    pub fn set_phase(
+        &mut self,
+        kind: SourceKind,
+        channel: usize,
+        inverted: bool,
+    ) -> Result<()> {
+        if channel >= CHANNELS {
+            return Err(MixerError::ChannelOutOfRange(channel));
+        }
+        self.bank_mut(kind).channels[channel].phase_inverted = inverted;
+        Ok(())
+    }
+
+    pub fn set_width(
+        &mut self,
+        kind: SourceKind,
+        pair: usize,
+        width: f64,
+    ) -> Result<()> {
+        check_pair(pair)?;
+        self.bank_mut(kind).width[pair] = clamp_pan(width);
+        Ok(())
+    }
+
+    pub fn set_ms_proc(
+        &mut self,
+        kind: SourceKind,
+        pair: usize,
+        enabled: bool,
+    ) -> Result<()> {
+        check_pair(pair)?;
+        self.bank_mut(kind).ms_proc[pair] = enabled;
+        Ok(())
+    }
+
+    /// Phase of one output channel (0–27).
+    pub fn set_output_phase(
+        &mut self,
+        channel: usize,
+        inverted: bool,
+    ) -> Result<()> {
+        if channel >= CHANNELS {
+            return Err(MixerError::ChannelOutOfRange(channel));
+        }
+        self.outputs[channel / 2].phase_inverted[channel % 2] = inverted;
         Ok(())
     }
 
@@ -422,21 +488,38 @@ impl Mixer {
                     if send.gain == 0.0 || solo_silenced {
                         continue;
                     }
-                    let (out_left, out_right) = (2 * output, 2 * output + 1);
+                    let out_channels = [2 * output, 2 * output + 1];
                     if strip.stereo {
-                        let (left, right) = law::balance(send.pan);
-                        let right_channel = strip.channel + 1;
-                        matrix[out_left][strip.channel] =
-                            signed(send.gain * left, source.phase_inverted);
-                        matrix[out_right][right_channel] = signed(
-                            send.gain * right,
-                            bank.channels[right_channel].phase_inverted,
-                        );
+                        let pair = strip.channel / 2;
+                        let mix = stereo_mix(bank.width[pair], bank.ms_proc[pair]);
+                        let sides = law::balance(send.pan);
+                        let side_gains = [sides.0, sides.1];
+                        let source_channels = [strip.channel, strip.channel + 1];
+                        for (row, out_channel) in out_channels.into_iter().enumerate() {
+                            for (col, source_channel) in source_channels.into_iter().enumerate() {
+                                let phase =
+                                    phase_sign(bank.channels[source_channel].phase_inverted);
+                                matrix[out_channel][source_channel] = to_crosspoint(
+                                    send.gain * side_gains[row] * mix[row][col] * phase,
+                                );
+                            }
+                        }
                     } else {
                         let (left, right) = law::mono_pan(send.pan);
-                        let phase = source.phase_inverted;
-                        matrix[out_left][strip.channel] = signed(send.gain * left, phase);
-                        matrix[out_right][strip.channel] = signed(send.gain * right, phase);
+                        let phase = phase_sign(source.phase_inverted);
+                        matrix[out_channels[0]][strip.channel] =
+                            to_crosspoint(send.gain * left * phase);
+                        matrix[out_channels[1]][strip.channel] =
+                            to_crosspoint(send.gain * right * phase);
+                    }
+                }
+            }
+        }
+        for channel in 0..CHANNELS {
+            if self.outputs[channel / 2].phase_inverted[channel % 2] {
+                for matrix in [&mut crosspoints.inputs, &mut crosspoints.playbacks] {
+                    for value in matrix[channel].iter_mut().filter(|value| **value != 0.0) {
+                        *value = -*value;
                     }
                 }
             }
@@ -510,12 +593,51 @@ fn clamp_pan(pan: f64) -> f64 {
     }
 }
 
-fn signed(
-    gain: f64,
-    inverted: bool,
-) -> f64 {
-    let raw = law::to_dbus(gain);
-    if inverted && raw != 0.0 { -raw } else { raw }
+fn check_pair(pair: usize) -> Result<()> {
+    if pair >= PAIRS {
+        Err(MixerError::ChannelOutOfRange(2 * pair))
+    } else {
+        Ok(())
+    }
+}
+
+fn phase_sign(inverted: bool) -> f64 {
+    if inverted { -1.0 } else { 1.0 }
+}
+
+/// Signed linear gain to a D-Bus crosspoint value: the sign carries the
+/// phase, the magnitude is capped at [`GAIN_MAX`].
+fn to_crosspoint(gain: f64) -> f64 {
+    let raw = law::to_dbus(gain.abs().min(GAIN_MAX));
+    if raw == 0.0 { 0.0 } else { raw.copysign(gain) }
+}
+
+/// How a stereo strip's two channels (columns: left, right) reach the
+/// two sides of an output (rows: left, right).
+///
+/// M/S processing comes first: mid (L+R) to the left, side (L−R) to the
+/// right, scaled by 1/√2 so that applying it twice gives the original
+/// (it works as encoder and decoder, manual §27.6). Width then blends
+/// each side with the other: 1 keeps them, 0 sums to mono, −1 swaps.
+fn stereo_mix(
+    width: f64,
+    ms_proc: bool,
+) -> [[f64; 2]; 2] {
+    let keep = (1.0 + width) / 2.0;
+    let cross = (1.0 - width) / 2.0;
+    let width_matrix = [[keep, cross], [cross, keep]];
+    if !ms_proc {
+        return width_matrix;
+    }
+    let k = std::f64::consts::FRAC_1_SQRT_2;
+    let ms = [[k, k], [k, -k]];
+    let mut mix = [[0.0; 2]; 2];
+    for (row, mix_row) in mix.iter_mut().enumerate() {
+        for (col, value) in mix_row.iter_mut().enumerate() {
+            *value = width_matrix[row][0] * ms[0][col] + width_matrix[row][1] * ms[1][col];
+        }
+    }
+    mix
 }
 
 #[cfg(test)]
@@ -623,5 +745,83 @@ mod tests {
         let mut mixer = Mixer::default();
         mixer.playbacks.channels[0].phase_inverted = true;
         assert_eq!(mixer.render().playbacks[0][0], -16384.0);
+    }
+
+    #[test]
+    fn phase_right_inverts_only_the_right_channel() {
+        let mut mixer = Mixer::default();
+        mixer.set_phase(SourceKind::Playback, 1, true).unwrap();
+        let crosspoints = mixer.render();
+        assert_eq!(crosspoints.playbacks[0][0], 16384.0);
+        assert_eq!(crosspoints.playbacks[1][1], -16384.0);
+    }
+
+    #[test]
+    fn width_zero_is_mono_and_minus_one_swaps() {
+        let mut mixer = Mixer::default();
+        mixer.set_width(SourceKind::Playback, 0, 0.0).unwrap();
+        let mono = mixer.render().playbacks;
+        for (out, source) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+            assert_eq!(mono[out][source], 8192.0, "out {out} source {source}");
+        }
+        mixer.set_width(SourceKind::Playback, 0, -1.0).unwrap();
+        let swapped = mixer.render().playbacks;
+        assert_eq!(swapped[0][1], 16384.0);
+        assert_eq!(swapped[1][0], 16384.0);
+        assert_eq!(swapped[0][0], 0.0);
+        assert_eq!(swapped[1][1], 0.0);
+    }
+
+    #[test]
+    fn ms_proc_sends_mid_left_and_side_right() {
+        let mut mixer = Mixer::default();
+        mixer.set_ms_proc(SourceKind::Playback, 0, true).unwrap();
+        let crosspoints = mixer.render().playbacks;
+        assert_eq!(crosspoints[0][0], 11585.0);
+        assert_eq!(crosspoints[0][1], 11585.0);
+        assert_eq!(crosspoints[1][0], 11585.0);
+        assert_eq!(crosspoints[1][1], -11585.0);
+    }
+
+    #[test]
+    fn ms_proc_applied_twice_is_the_original() {
+        let mix = stereo_mix(1.0, true);
+        for row in 0..2 {
+            for col in 0..2 {
+                let product: f64 = (0..2).map(|k| mix[row][k] * mix[k][col]).sum();
+                let expected = if row == col { 1.0 } else { 0.0 };
+                assert!((product - expected).abs() < 1e-12);
+            }
+        }
+    }
+
+    #[test]
+    fn output_phase_inverts_everything_feeding_that_side() {
+        let mut mixer = Mixer::default();
+        mixer.set_send_gain(SourceKind::Input, 0, 0, 1.0).unwrap();
+        mixer.set_output_phase(1, true).unwrap();
+        let crosspoints = mixer.render();
+        assert_eq!(crosspoints.playbacks[0][0], 16384.0, "left side untouched");
+        assert_eq!(crosspoints.playbacks[1][1], -16384.0);
+        assert_eq!(crosspoints.inputs[1][1], -16384.0);
+        assert_eq!(crosspoints.outputs[1], 16384.0, "volume stays positive");
+    }
+
+    #[test]
+    fn output_phase_cancels_source_phase() {
+        let mut mixer = Mixer::default();
+        mixer.set_phase(SourceKind::Playback, 0, true).unwrap();
+        mixer.set_output_phase(0, true).unwrap();
+        assert_eq!(mixer.render().playbacks[0][0], 16384.0);
+    }
+
+    #[test]
+    fn splitting_stereo_resets_width_and_ms() {
+        let mut mixer = Mixer::default();
+        mixer.set_width(SourceKind::Input, 2, 0.3).unwrap();
+        mixer.set_ms_proc(SourceKind::Input, 2, true).unwrap();
+        mixer.set_stereo(SourceKind::Input, 2, false).unwrap();
+        assert_eq!(mixer.inputs.width[2], 1.0);
+        assert!(!mixer.inputs.ms_proc[2]);
     }
 }

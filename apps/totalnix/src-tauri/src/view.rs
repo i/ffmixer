@@ -36,6 +36,11 @@ pub struct StripView {
     pub soloed: bool,
     /// Sends to at least one output.
     pub routed: bool,
+    /// Phase inverted, per channel of the strip (one entry if mono).
+    pub phase: Vec<bool>,
+    /// Stereo width, 1 = normal (stereo strips only).
+    pub width: f64,
+    pub ms_proc: bool,
     /// Meter indices into the row's meter array.
     pub meters: Vec<usize>,
 }
@@ -48,6 +53,8 @@ pub struct OutputView {
     pub volume_db: Option<f64>,
     pub balance: f64,
     pub muted: bool,
+    /// Phase L / Phase R.
+    pub phase: [bool; 2],
     pub meters: [usize; 2],
 }
 
@@ -64,7 +71,14 @@ impl ViewState {
                 .strips(kind)
                 .into_iter()
                 .map(|strip| {
-                    let source = &mixer.bank(kind).channels[strip.channel];
+                    let bank = mixer.bank(kind);
+                    let source = &bank.channels[strip.channel];
+                    let pair = strip.channel / 2;
+                    let channels = if strip.stereo {
+                        vec![strip.channel, strip.channel + 1]
+                    } else {
+                        vec![strip.channel]
+                    };
                     let send = source.sends[selected];
                     StripView {
                         kind,
@@ -80,11 +94,13 @@ impl ViewState {
                         muted: source.muted,
                         soloed: source.soloed,
                         routed: mixer.is_routed(kind, strip.channel),
-                        meters: if strip.stereo {
-                            vec![strip.channel, strip.channel + 1]
-                        } else {
-                            vec![strip.channel]
-                        },
+                        phase: channels
+                            .iter()
+                            .map(|&channel| bank.channels[channel].phase_inverted)
+                            .collect(),
+                        width: bank.width[pair],
+                        ms_proc: bank.ms_proc[pair],
+                        meters: channels,
                     }
                 })
                 .collect()
@@ -98,6 +114,7 @@ impl ViewState {
                     volume_db: law::gain_to_db(output.volume),
                     balance: output.balance,
                     muted: output.muted,
+                    phase: output.phase_inverted,
                     meters: [2 * pair, 2 * pair + 1],
                 }
             })

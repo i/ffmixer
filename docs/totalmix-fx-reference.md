@@ -94,6 +94,28 @@ Settings panel:
   Loopback sends that output to the recording software in place of that
   channel's hardware input.
 
+How totalnix implements these on the FF800 (all in `mixer-core`):
+
+- **Phase L/R (sources):** negative crosspoint values; the hardware
+  inverts per crosspoint.
+- **Width and MS Proc:** a 2×2 mix of the pair's left and right channels
+  into each output side. M/S comes first and is scaled by 1/√2, so it
+  is its own inverse (encoder and decoder); width then blends the
+  sides (1 keeps, 0 sums to mono, −1 swaps).
+- **Phase L/R (outputs):** no Linux driver exposes an output inverter
+  (FFADO has `InputInverts`/`PlaybackInverts` only), and whether the
+  output volume register accepts negative values is untested. totalnix
+  inverts every crosspoint feeding that output channel instead, which
+  sounds identical.
+- **Not yet:** mono outputs, Talkback and No Trim (need Control Room and
+  Trim). **Loopback** looks like a hardware switch: FFADO's
+  `RME_FF_OUTPUT_REC_MASK` (`0x801c0080`, write-only, one flag per
+  output) is commented "record outputs", but FFADO only sets all flags
+  together and does not expose it on D-Bus. Needs hardware writes and a
+  test.
+- Import does not reconstruct width, M/S or output phase; they come
+  back as mono strips and per-source phase (same sound).
+
 The FF800 has **no software gain or 48V on the strip**: mic gain is an
 analog pot on the unit's front panel. 48V is handled under Device
 settings (surface 9). We may put 48V/Inst toggles on strips 7–10 and 1
@@ -321,4 +343,4 @@ TotalMix on another machine, or by stand-alone MIDI control) is lost.
 3. **Productivity:** matrix view, undo/redo, snapshots, copy/paste/clear
    submix, Trim, temporary fader group, names, keyboard shortcuts.
 4. **Later:** Free routing mode, groups, layout presets and Sub,
-   workspaces, Width/MS, loopback, Reset Mix, OSC/MIDI remote.
+   workspaces, loopback, Reset Mix, OSC/MIDI remote.

@@ -6,6 +6,11 @@
 //! otherwise it becomes two mono strips. Any raw matrix is representable
 //! this way except mixed phase signs on one channel and gains above
 //! +6 dB, which are reported.
+//!
+//! Width, M/S processing and output phase are not reconstructed: their
+//! crosspoints come back as mono strips and per-source phase, which
+//! sound the same. Mixed signs (M/S, or output phase on a source that
+//! also feeds other outputs) are reported as above.
 
 use crate::law::{self, GAIN_MAX};
 use crate::mixer::{Crosspoints, Mixer, Output, SourceBank, SourceKind};
@@ -33,7 +38,7 @@ pub fn import(crosspoints: &Crosspoints) -> (Mixer, ImportReport) {
         mixer.outputs[pair] = Output {
             volume,
             balance,
-            muted: false,
+            ..Output::default()
         };
     }
     (mixer, report)

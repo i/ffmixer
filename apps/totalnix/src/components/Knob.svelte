@@ -1,7 +1,8 @@
 <!--
-  Pan / balance knob (manual §25.8): drag vertically or use the wheel
-  (Shift speeds up); double-click or Ctrl+click centres; Shift+click hard
-  left; Shift+Ctrl+click hard right. Arrow keys step, Home centres.
+  Knob for pan, balance or width (manual §25.8), range −1 to +1: drag
+  vertically or use the wheel (Shift speeds up); double-click or
+  Ctrl+click resets (centre by default); Shift+click goes to −1;
+  Shift+Ctrl+click to +1. Arrow keys step, Home resets.
 -->
 <script lang="ts">
   import { clamp, formatPan } from '../lib/scale'
@@ -10,9 +11,13 @@
     value: number
     label: string
     onchange: (value: number) => void
+    /** Text shown next to the knob. Defaults to pan style (L50, 0, R50). */
+    format?: (value: number) => string
+    /** Value for double-click, Ctrl+click and Home. */
+    resetValue?: number
   }
 
-  let { value, label, onchange }: Props = $props()
+  let { value, label, onchange, format = formatPan, resetValue = 0 }: Props = $props()
 
   const PIXELS_FOR_FULL_RANGE = 160
   const FAST_FACTOR = 4
@@ -37,7 +42,7 @@
       return
     }
     if (event.ctrlKey) {
-      set(0)
+      set(resetValue)
       return
     }
     event.preventDefault()
@@ -70,7 +75,7 @@
     const step = event.shiftKey ? 0.1 : 0.02
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') set(shown + step)
     else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') set(shown - step)
-    else if (event.key === 'Home') set(0)
+    else if (event.key === 'Home') set(resetValue)
     else return
     event.preventDefault()
   }
@@ -85,12 +90,12 @@
     aria-valuemin={-100}
     aria-valuemax={100}
     aria-valuenow={Math.round(shown * 100)}
-    aria-valuetext={formatPan(shown)}
+    aria-valuetext={format(shown)}
     {onpointerdown}
     {onpointermove}
     onpointerup={endDrag}
     onpointercancel={endDrag}
-    ondblclick={() => set(0)}
+    ondblclick={() => set(resetValue)}
     {onwheel}
     {onkeydown}
   >
@@ -98,7 +103,7 @@
       <div class="pointer"></div>
     </div>
   </div>
-  <span class="value">{formatPan(shown)}</span>
+  <span class="value">{format(shown)}</span>
 </div>
 
 <style>

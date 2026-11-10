@@ -27,8 +27,10 @@ the unit. Without a unit it starts in demo mode with simulated meters.
   to it.
 - Per strip: pan/balance knob, mute, solo (current submix only), meter
   with peak hold and over indicator, fader, numeric readouts, and a
-  settings panel with mono/stereo.
-- Output strips: volume, balance, mute.
+  Settings panel: Stereo, Width, MS Proc, Phase L/R (Phase for mono).
+- Output strips: volume, balance, mute, and a Settings panel with
+  Phase L/R. Mono outputs, Talkback, No Trim and Loopback are shown but
+  disabled until their features exist.
 - Control Strip: mute/solo masters (clear, then restore), RMS readouts.
 - Faders move only when dragged; clicks never change a level, so a
   misclick cannot jump a route to 0 dB. Drag is relative (no jump to

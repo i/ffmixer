@@ -68,6 +68,27 @@ pub enum Action {
         pair: usize,
         value: bool,
     },
+    /// Phase of any channel, including the right side of a stereo strip.
+    SetPhase {
+        kind: SourceKind,
+        channel: usize,
+        value: bool,
+    },
+    SetWidth {
+        kind: SourceKind,
+        pair: usize,
+        width: f64,
+    },
+    SetMsProc {
+        kind: SourceKind,
+        pair: usize,
+        value: bool,
+    },
+    /// Phase of one output channel (0–27).
+    SetOutputPhase {
+        channel: usize,
+        value: bool,
+    },
     SetOutputVolume {
         output: usize,
         db: Option<f64>,
@@ -165,6 +186,14 @@ impl Session {
                 mixer.set_soloed(kind, channel, value)
             }
             Action::SetStereo { kind, pair, value } => mixer.set_stereo(kind, pair, value),
+            Action::SetPhase {
+                kind,
+                channel,
+                value,
+            } => mixer.set_phase(kind, channel, value),
+            Action::SetWidth { kind, pair, width } => mixer.set_width(kind, pair, width),
+            Action::SetMsProc { kind, pair, value } => mixer.set_ms_proc(kind, pair, value),
+            Action::SetOutputPhase { channel, value } => mixer.set_output_phase(channel, value),
             Action::SetOutputVolume { output, db } => {
                 mixer.set_output_volume(output, law::db_to_gain(db))
             }
@@ -285,5 +314,18 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn settings_actions_deserialize_from_ui_json() {
+        for json in [
+            r#"{"type":"setPhase","kind":"input","channel":1,"value":true}"#,
+            r#"{"type":"setWidth","kind":"playback","pair":0,"width":0.5}"#,
+            r#"{"type":"setMsProc","kind":"input","pair":3,"value":true}"#,
+            r#"{"type":"setOutputPhase","channel":5,"value":true}"#,
+        ] {
+            let action: Result<Action, _> = serde_json::from_str(json);
+            assert!(action.is_ok(), "{json}: {action:?}");
+        }
     }
 }

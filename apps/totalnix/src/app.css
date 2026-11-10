@@ -15,6 +15,7 @@
   --mute: #3d8fe0;
   --solo: #e8a33a;
   --cue: #46b85a;
+  --phase: #c8463c;
   --over: #ff5a46;
   --focus: #6fb8ff;
 
@@ -81,6 +82,43 @@ button {
 .toggle.cue[aria-pressed='true'] {
   color: #fff;
   background: var(--cue);
+}
+.toggle.phase[aria-pressed='true'] {
+  color: #fff;
+  background: var(--phase);
+}
+
+/* Channel Settings panel, shared by source and output strips. */
+.strip-group {
+  display: flex;
+  flex-shrink: 0;
+}
+.settings {
+  width: 72px;
+  padding: 6px 5px;
+  background: var(--panel);
+  border-right: 1px solid var(--strip-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-title {
+  font-size: 11px;
+  color: var(--text);
+}
+.settings-caption {
+  margin-top: -4px;
+  font-size: 9.5px;
+  text-align: right;
+  color: var(--text-dim);
+}
+.phase-pair {
+  display: flex;
+  gap: 2px;
+}
+.phase-pair .toggle {
+  flex: 1;
+  padding: 0 2px;
 }
 
 .icon {

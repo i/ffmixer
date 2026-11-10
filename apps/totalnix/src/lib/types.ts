@@ -15,6 +15,11 @@ export interface StripView {
   muted: boolean
   soloed: boolean
   routed: boolean
+  /** Phase inverted, per channel of the strip (one entry if mono). */
+  phase: boolean[]
+  /** Stereo width, 1 = normal (stereo strips only). */
+  width: number
+  msProc: boolean
   meters: number[]
 }
 
@@ -24,6 +29,8 @@ export interface OutputView {
   volumeDb: number | null
   balance: number
   muted: boolean
+  /** Phase L / Phase R. */
+  phase: [boolean, boolean]
   meters: [number, number]
 }
 
@@ -48,6 +55,10 @@ export type Action =
   | { type: 'setMuted'; kind: SourceKind; channel: number; value: boolean }
   | { type: 'setSoloed'; kind: SourceKind; channel: number; value: boolean }
   | { type: 'setStereo'; kind: SourceKind; pair: number; value: boolean }
+  | { type: 'setPhase'; kind: SourceKind; channel: number; value: boolean }
+  | { type: 'setWidth'; kind: SourceKind; pair: number; width: number }
+  | { type: 'setMsProc'; kind: SourceKind; pair: number; value: boolean }
+  | { type: 'setOutputPhase'; channel: number; value: boolean }
   | { type: 'setOutputVolume'; output: number; db: number | null }
   | { type: 'setOutputBalance'; output: number; pan: number }
   | { type: 'setOutputMuted'; output: number; value: boolean }
