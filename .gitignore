@@ -4,3 +4,4 @@
 node_modules/
 /apps/totalnix/dist/
 /apps/totalnix/src-tauri/gen/
+/ss
