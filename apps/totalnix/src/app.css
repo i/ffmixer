@@ -1,0 +1,120 @@
+/* TotalMix FX-inspired dark theme. */
+:root {
+  --bg: #23272c;
+  --strip: #3a4047;
+  --strip-unrouted: #33383e;
+  --strip-dark: #2e3338;
+  --strip-selected: #4b535c;
+  --strip-edge: #1f2327;
+  --panel: #333940;
+  --panel-dark: #272b30;
+  --panel-blue: #1f8fbf;
+  --text: #d4dae0;
+  --text-dim: #8a939c;
+  --accent: #f0a030;
+  --mute: #3d8fe0;
+  --solo: #e8a33a;
+  --cue: #46b85a;
+  --over: #ff5a46;
+  --focus: #6fb8ff;
+
+  color-scheme: dark;
+  font-family: 'Segoe UI', 'Cantarell', 'Noto Sans', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+}
+
+.toggle {
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: linear-gradient(to bottom, #59616a, #40464d);
+  border: 1px solid #1a1d21;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.toggle:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.toggle:focus-visible,
+.icon:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: 1px;
+}
+.toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.toggle.wide {
+  border-radius: 4px;
+}
+.toggle[aria-pressed='true'] {
+  color: #111;
+  background: #d9dee3;
+}
+.toggle.mute[aria-pressed='true'] {
+  color: #fff;
+  background: var(--mute);
+}
+.toggle.solo[aria-pressed='true'] {
+  color: #111;
+  background: var(--solo);
+}
+.toggle.cue[aria-pressed='true'] {
+  color: #fff;
+  background: var(--cue);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.icon:hover,
+.icon.open {
+  color: var(--text);
+  border-color: #50575f;
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1d2024;
+}
+::-webkit-scrollbar-thumb {
+  background: #4f565e;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

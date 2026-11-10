@@ -1,0 +1,9 @@
+[package]
+name = "mixer-core"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "TotalMix-style submix model for the RME Fireface 800"
+
+[dependencies]
+serde.workspace = true

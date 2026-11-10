@@ -1,0 +1,19 @@
+[package]
+name = "totalnix"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "TotalMix FX-style mixer for the RME Fireface 800"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+ffado-dbus.workspace = true
+fw-meter.workspace = true
+mixer-core.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -1,9 +1,11 @@
 [workspace]
 resolver = "3"
 members = [
+    "apps/totalnix/src-tauri",
     "crates/ffado-dbus",
     "crates/fw-meter",
     "crates/ffado-probe",
+    "crates/mixer-core",
 ]
 
 [workspace.package]
@@ -13,6 +15,7 @@ publish = false
 [workspace.dependencies]
 ffado-dbus = { path = "crates/ffado-dbus" }
 fw-meter = { path = "crates/fw-meter" }
+mixer-core = { path = "crates/mixer-core" }
 libc = "0.2"
-serde = "1"
+serde = { version = "1", features = ["derive"] }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
