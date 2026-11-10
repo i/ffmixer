@@ -130,7 +130,9 @@ impl Node {
         if length == 0 || length > MAX_READ_LENGTH || !length.is_multiple_of(4) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("read length {length} must be a non-zero multiple of 4 up to {MAX_READ_LENGTH}"),
+                format!(
+                    "read length {length} must be a non-zero multiple of 4 up to {MAX_READ_LENGTH}"
+                ),
             ));
         }
 
@@ -170,7 +172,10 @@ impl Node {
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() || !self.poll_readable(remaining)? {
-                return Err(io::Error::new(io::ErrorKind::TimedOut, "no response from device"));
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "no response from device",
+                ));
             }
 
             let size = self.file.read(&mut event)?;
@@ -191,9 +196,9 @@ impl Node {
             let rcode = read_u32(&event, RESPONSE_RCODE_OFFSET);
             let payload_length = read_u32(&event, RESPONSE_LENGTH_OFFSET) as usize;
             return match rcode {
-                RCODE_COMPLETE if payload_length == length => Ok(
-                    event[RESPONSE_DATA_OFFSET..RESPONSE_DATA_OFFSET + length].to_vec(),
-                ),
+                RCODE_COMPLETE if payload_length == length => {
+                    Ok(event[RESPONSE_DATA_OFFSET..RESPONSE_DATA_OFFSET + length].to_vec())
+                }
                 RCODE_COMPLETE => Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("expected {length} bytes, got {payload_length}"),
@@ -202,12 +207,17 @@ impl Node {
                     io::ErrorKind::Interrupted,
                     "bus reset during request",
                 )),
-                other => Err(io::Error::other(format!("transaction failed, rcode 0x{other:02x}"))),
+                other => Err(io::Error::other(format!(
+                    "transaction failed, rcode 0x{other:02x}"
+                ))),
             };
         }
     }
 
-    fn poll_readable(&self, timeout: Duration) -> io::Result<bool> {
+    fn poll_readable(
+        &self,
+        timeout: Duration,
+    ) -> io::Result<bool> {
         let mut fd = libc::pollfd {
             fd: self.file.as_raw_fd(),
             events: libc::POLLIN,

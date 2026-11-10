@@ -1,0 +1,2 @@
+# One parameter per line in function definitions keeps diffs legible.
+fn_params_layout = "Vertical"

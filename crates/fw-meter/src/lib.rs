@@ -53,7 +53,10 @@ impl MeterFrame {
         if block.len() != METER_BLOCK_LENGTH {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("meter block is {} bytes, expected {METER_BLOCK_LENGTH}", block.len()),
+                format!(
+                    "meter block is {} bytes, expected {METER_BLOCK_LENGTH}",
+                    block.len()
+                ),
             ));
         }
         let level = |index: usize| {
@@ -92,7 +95,9 @@ impl Ff800Meters {
     }
 
     pub fn read(&mut self) -> io::Result<MeterFrame> {
-        let block = self.node.read_block(METER_OFFSET, METER_BLOCK_LENGTH, READ_TIMEOUT)?;
+        let block = self
+            .node
+            .read_block(METER_OFFSET, METER_BLOCK_LENGTH, READ_TIMEOUT)?;
         MeterFrame::parse(&block)
     }
 }
@@ -127,7 +132,10 @@ pub fn find_node_by_guid(
 fn parse_guid(text: &str) -> io::Result<u64> {
     let digits = text.trim_start_matches("0x");
     u64::from_str_radix(digits, 16).map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidInput, format!("invalid GUID `{text}`"))
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid GUID `{text}`"),
+        )
     })
 }
 
@@ -175,7 +183,13 @@ mod tests {
 
     #[test]
     fn guid_accepts_sysfs_and_ffado_forms() {
-        assert_eq!(parse_guid("0x000a35004aa780e6").unwrap(), 0x000a_3500_4aa7_80e6);
-        assert_eq!(parse_guid("000a35004aa780e6").unwrap(), 0x000a_3500_4aa7_80e6);
+        assert_eq!(
+            parse_guid("0x000a35004aa780e6").unwrap(),
+            0x000a_3500_4aa7_80e6
+        );
+        assert_eq!(
+            parse_guid("000a35004aa780e6").unwrap(),
+            0x000a_3500_4aa7_80e6
+        );
     }
 }

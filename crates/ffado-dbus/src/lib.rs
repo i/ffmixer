@@ -52,7 +52,10 @@ pub enum Error {
 }
 
 impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
             Error::DBus(e) => write!(f, "D-Bus error: {e}"),
             Error::NotReadOnly(m) => write!(f, "refusing non-read method `{m}`"),
@@ -95,12 +98,7 @@ impl FfadoReader {
 
     /// GUIDs of all devices FFADO has discovered, e.g. `000a35004aa780e6`.
     pub fn device_guids(&self) -> Result<Vec<String>> {
-        let count: i32 = self.call(
-            DEVICE_MANAGER_PATH,
-            IFACE_CONTAINER,
-            "getNbElements",
-            &(),
-        )?;
+        let count: i32 = self.call(DEVICE_MANAGER_PATH, IFACE_CONTAINER, "getNbElements", &())?;
         (0..count)
             .map(|index| {
                 self.call(
@@ -119,12 +117,7 @@ impl FfadoReader {
         guid: &str,
         control: &str,
     ) -> Result<i32> {
-        self.call(
-            &device_path(guid, control),
-            IFACE_DISCRETE,
-            "getValue",
-            &(),
-        )
+        self.call(&device_path(guid, control), IFACE_DISCRETE, "getValue", &())
     }
 
     /// Reads a whole matrix mixer, e.g. `Mixer/InputFaders`.
@@ -173,8 +166,8 @@ impl FfadoReader {
         if !READ_METHODS.contains(&method) {
             return Err(Error::NotReadOnly(method.to_owned()));
         }
-        let object_path = OwnedObjectPath::try_from(path)
-            .map_err(|_| Error::InvalidPath(path.to_owned()))?;
+        let object_path =
+            OwnedObjectPath::try_from(path).map_err(|_| Error::InvalidPath(path.to_owned()))?;
         let reply = self.connection.call_method(
             Some(SERVICE),
             object_path,
