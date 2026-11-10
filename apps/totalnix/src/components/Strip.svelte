@@ -38,7 +38,6 @@
 <div class="strip-group">
   <div
     class="strip"
-    class:stereo={strip.stereo}
     class:silenced={strip.muted || silencedBySolo}
     class:unrouted={!strip.routed}
   >
@@ -131,14 +130,13 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    width: 52px;
+    /* Mono and stereo strips share one width, as in TotalMix; a mono
+       strip just shows one meter. Narrower strips cannot fit the knob row. */
+    width: 66px;
     padding: 4px 3px 3px;
     background: var(--strip);
     border-right: 1px solid var(--strip-edge);
     box-sizing: border-box;
-  }
-  .strip.stereo {
-    width: 66px;
   }
   .strip.unrouted {
     background: var(--strip-unrouted);
