@@ -1,4 +1,8 @@
-<!-- One mixer row: strips scroll horizontally above a TotalMix-style label. -->
+<!--
+  One mixer row: strips scroll horizontally above a TotalMix-style label.
+  Each row is its own inset panel, and the label sits inside it, so it
+  reads as belonging to the strips above it rather than the next row.
+-->
 <script lang="ts">
   import type { Snippet } from 'svelte'
 
@@ -24,7 +28,10 @@
     min-height: 0;
     min-width: 0;
     flex: 1;
-    border-bottom: 2px solid #15171a;
+    background: var(--bg);
+    border: 1px solid #101214;
+    border-radius: 4px;
+    overflow: hidden;
   }
   .strips {
     flex: 1;
@@ -40,6 +47,7 @@
     text-transform: uppercase;
     color: var(--text-dim);
     background: var(--panel-dark);
+    border-top: 1px solid #101214;
     padding: 2px 8px;
   }
 </style>

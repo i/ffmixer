@@ -70,6 +70,9 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    background: #16181b;
   }
   .divider {
     width: 4px;

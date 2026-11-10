@@ -1,6 +1,8 @@
 <!--
-  Hardware output strip (row 3). Clicking the name selects this output's
-  submix (manual §25.2); the selected output is bright, others darkened.
+  Hardware output strip (row 3). Pressing anywhere on the strip selects
+  this output's submix (manual §25.2); the selected output is bright,
+  others darkened. The name button is the keyboard-accessible way to
+  select. Selecting only changes what the UI edits, never the sound.
 -->
 <script lang="ts">
   import { send } from '../lib/backend.svelte'
@@ -23,7 +25,17 @@
   }
 </script>
 
-<div class="strip" class:selected class:silenced={output.muted}>
+<!--
+  Mouse convenience only: the name button below offers the same action
+  to keyboard and screen-reader users.
+-->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="strip"
+  class:selected
+  class:silenced={output.muted}
+  onpointerdowncapture={select}
+>
   <button
     class="name"
     aria-pressed={selected}
@@ -64,6 +76,7 @@
     width: 66px;
     padding: 4px 3px 3px;
     background: var(--strip-dark);
+    cursor: pointer;
     border-right: 1px solid var(--strip-edge);
     box-sizing: border-box;
     flex-shrink: 0;

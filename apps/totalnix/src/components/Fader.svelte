@@ -1,8 +1,12 @@
 <!--
-  TotalMix-style fader (manual §25.3, §25.8):
-  drag or mouse wheel to move; Shift for fine control; double-click or
-  Ctrl+click toggles 0 dB and −∞. Keyboard: arrows ±0.5 dB (Shift ±0.1),
-  Page Up/Down ±6 dB, Home 0 dB, End −∞.
+  TotalMix-style fader (manual §25.3, §25.8), with one deliberate
+  departure: clicks never change the level. A misclick must not jump a
+  route to 0 dB, so the only mouse gesture that moves the fader is a
+  drag, and it is relative: grabbing the thumb or the track never jumps,
+  and nothing changes until the pointer has moved a few pixels.
+  Shift while dragging moves finely. Wheel ±0.5 dB (Shift ±0.1).
+  Keyboard: arrows ±0.5 dB (Shift ±0.1), Page Up/Down ±6 dB, Home 0 dB,
+  End −∞.
 -->
 <script lang="ts">
   import { FADER_MAX_DB, FADER_TICKS, clamp, dbToFader, faderToDb, formatGain } from '../lib/scale'
@@ -17,9 +21,12 @@
 
   const THUMB_HEIGHT = 22
   const FINE_FACTOR = 0.125
+  /** Pointer travel (px) before a press counts as a drag. */
+  const DRAG_THRESHOLD = 4
 
   let track: HTMLDivElement
   let dragging = $state(false)
+  let pressed = false
   let local = $state<number | null>(null)
   let dragStartY = 0
   let dragStartPosition = 0
@@ -40,46 +47,39 @@
     setDb(next <= -90 ? null : next)
   }
 
-  function toggleUnity(): void {
-    setDb(shown !== null && Math.abs(shown) < 0.05 ? null : 0)
-  }
-
   function travel(): number {
     return Math.max(1, track.clientHeight - THUMB_HEIGHT)
   }
 
   function onpointerdown(event: PointerEvent): void {
     if (event.button !== 0) return
-    if (event.ctrlKey) {
-      toggleUnity()
-      return
-    }
     event.preventDefault()
+    track.focus()
     track.setPointerCapture(event.pointerId)
-    const rect = track.getBoundingClientRect()
-    const thumbTop = rect.top + (1 - position) * travel()
-    const onThumb = event.clientY >= thumbTop && event.clientY <= thumbTop + THUMB_HEIGHT
-    dragging = true
-    local = shown
-    if (!onThumb) {
-      // Clicking the track jumps the thumb there, then drags from it.
-      const jumped = 1 - (event.clientY - rect.top - THUMB_HEIGHT / 2) / travel()
-      setDb(faderToDb(clamp(jumped, 0, 1)))
-    }
+    pressed = true
     dragStartY = event.clientY
-    dragStartPosition = dbToFader(local)
   }
 
   function onpointermove(event: PointerEvent): void {
-    if (!dragging) return
+    if (!pressed) return
+    if (!dragging) {
+      if (Math.abs(event.clientY - dragStartY) < DRAG_THRESHOLD) return
+      // Start measuring from here so the threshold itself adds no jump.
+      dragging = true
+      local = shown
+      dragStartY = event.clientY
+      dragStartPosition = dbToFader(shown)
+      return
+    }
     const factor = event.shiftKey ? FINE_FACTOR : 1
     const moved = ((dragStartY - event.clientY) / travel()) * factor
     setDb(faderToDb(clamp(dragStartPosition + moved, 0, 1)))
   }
 
   function endDrag(event: PointerEvent): void {
-    if (!dragging) return
+    if (!pressed) return
     track.releasePointerCapture(event.pointerId)
+    pressed = false
     dragging = false
   }
 
@@ -121,7 +121,6 @@
   {onpointermove}
   onpointerup={endDrag}
   onpointercancel={endDrag}
-  ondblclick={toggleUnity}
   {onwheel}
   {onkeydown}
 >

@@ -23,15 +23,19 @@ the unit. Without a unit it starts in demo mode with simulated meters.
 
 - Three rows (hardware inputs, software playback, hardware outputs) and
   an optional 2 Row view.
-- Submix view: click an output name to edit what is sent to it.
+- Submix view: click anywhere on an output strip to edit what is sent
+  to it.
 - Per strip: pan/balance knob, mute, solo (current submix only), meter
   with peak hold and over indicator, fader, numeric readouts, and a
   settings panel with mono/stereo.
 - Output strips: volume, balance, mute.
 - Control Strip: mute/solo masters (clear, then restore), RMS readouts.
-- Fader and knob gestures follow the TotalMix manual: drag, wheel, Shift
-  for fine, double-click or Ctrl+click for 0 dB / −∞ (faders) or centre
-  (knobs), Shift/Shift+Ctrl+click for hard left/right.
+- Faders move only when dragged; clicks never change a level, so a
+  misclick cannot jump a route to 0 dB. Drag is relative (no jump to
+  the pointer), Shift drags finely, wheel and arrow keys step.
+- Knob gestures follow the TotalMix manual: drag, wheel, Shift for
+  fine, double-click or Ctrl+click to centre, Shift/Shift+Ctrl+click
+  for hard left/right.
 
 ## Requirements
 

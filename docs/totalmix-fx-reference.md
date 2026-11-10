@@ -114,6 +114,15 @@ Gestures:
 | Shift+click narrow or settings button | Apply to every channel to the right |
 | Right-click any channel | Open Channel Layout with that channel preselected |
 
+**totalnix departs from this on purpose: no click may change a level.**
+A single misclick that jumps a route from −∞ to 0 dB can damage hearing
+or equipment. Faders move only by a relative drag (after a few pixels
+of travel), the wheel, or the keyboard; clicking the track or thumb,
+Ctrl+click and double-click do nothing. Any future control that sets a
+gain (matrix cells, value fields) follows the same rule. Clicking
+anywhere on an output strip selects its submix, which is safe because
+selection changes only what the UI edits.
+
 ### 2. Hardware output context menu (manual p69)
 
 Right-click an output: **Clear Submix**, **Copy Submix**, **Paste Submix**.
