@@ -1,0 +1,10 @@
+[package]
+name = "ffado-dbus"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Read-only client for ffado-dbus-server"
+
+[dependencies]
+serde.workspace = true
+zbus.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "ffado-probe"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Read-only probe of a Fireface 800 via ffado-dbus-server and FireWire meters"
+
+[dependencies]
+ffado-dbus.workspace = true
+fw-meter.workspace = true
