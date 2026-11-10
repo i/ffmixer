@@ -12,6 +12,8 @@ use mixer_core::writes::{self, Write};
 use mixer_core::{Crosspoints, Mixer, SourceKind, law};
 use serde::Deserialize;
 
+use crate::channel_names::ChannelNames;
+
 const READ_ONLY_STATUS: &str = "Read-only: changes are not sent to the unit";
 const LIVE_STATUS: &str = "Live: changes are sent to the unit";
 
@@ -47,6 +49,8 @@ pub struct Session {
     /// What the unit holds: read from it, then updated by every write.
     pub hardware: Option<Crosspoints>,
     pub warnings: Vec<String>,
+    /// User channel names (display only).
+    pub names: ChannelNames,
     /// Present while live: every model change is sent to the unit.
     link: Option<Box<dyn GainSink>>,
     /// Strips whose mute/solo the master buttons switched off, so the
@@ -137,6 +141,7 @@ impl Session {
             mixer: Mixer::default(),
             hardware: None,
             warnings: Vec::new(),
+            names: ChannelNames::default(),
             link: None,
             mute_memory: Vec::new(),
             solo_memory: Vec::new(),

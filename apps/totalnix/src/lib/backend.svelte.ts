@@ -7,7 +7,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
-import type { Action, ViewState } from './types'
+import type { Action, NameRow, ViewState } from './types'
 
 export const session = $state<{ view: ViewState | null; error: string }>({
   view: null,
@@ -96,4 +96,12 @@ export function setLive(value: boolean): Promise<void> {
 /** Discards edits and re-reads the unit's mix. */
 export function reloadFromUnit(): Promise<void> {
   return command('reload_from_unit')
+}
+
+/**
+ * Renames a source strip (`index` = its first channel) or an output pair.
+ * `null` restores the channel's own name. Display only; saved to disk.
+ */
+export function rename(row: NameRow, index: number, name: string | null): Promise<void> {
+  return command('rename', { row, index, name })
 }

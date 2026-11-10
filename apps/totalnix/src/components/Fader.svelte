@@ -1,12 +1,13 @@
 <!--
-  TotalMix-style fader (manual §25.3, §25.8), with one deliberate
-  departure: clicks never change the level. A misclick must not jump a
-  route to 0 dB, so the only mouse gesture that moves the fader is a
-  drag, and it is relative: grabbing the thumb or the track never jumps,
-  and nothing changes until the pointer has moved a few pixels.
-  Shift while dragging moves finely. Wheel ±0.5 dB (Shift ±0.1).
-  Keyboard: arrows ±0.5 dB (Shift ±0.1), Page Up/Down ±6 dB, Home 0 dB,
-  End −∞.
+  TotalMix-style fader (manual §25.3, §25.8). Single clicks never change
+  the level: dragging is relative, so grabbing the thumb or the track
+  never jumps, and nothing changes until the pointer has moved a few
+  pixels. Shift while dragging moves finely. Double-click sets 0 dB.
+  Wheel ±0.5 dB (Shift ±0.1). Keyboard: arrows ±0.5 dB (Shift ±0.1),
+  Page Up/Down ±6 dB, Home 0 dB, End −∞.
+
+  `unityShortcuts={false}` disables double-click and Home, for faders
+  where a jump to 0 dB is dangerous (the main monitor outputs).
 -->
 <script lang="ts">
   import { FADER_MAX_DB, FADER_TICKS, clamp, dbToFader, faderToDb, formatGain } from '../lib/scale'
@@ -15,9 +16,11 @@
     db: number | null
     label: string
     onchange: (db: number | null) => void
+    /** Allow double-click and Home to jump to 0 dB. */
+    unityShortcuts?: boolean
   }
 
-  let { db, label, onchange }: Props = $props()
+  let { db, label, onchange, unityShortcuts = true }: Props = $props()
 
   const THUMB_HEIGHT = 22
   const FINE_FACTOR = 0.125
@@ -96,7 +99,9 @@
       ArrowDown: () => stepDb(-fine),
       PageUp: () => stepDb(6),
       PageDown: () => stepDb(-6),
-      Home: () => setDb(0),
+      Home: () => {
+        if (unityShortcuts) setDb(0)
+      },
       End: () => setDb(null),
     }
     const action = handled[event.key]
@@ -122,6 +127,9 @@
   onpointerup={endDrag}
   onpointercancel={endDrag}
   {onwheel}
+  ondblclick={() => {
+    if (unityShortcuts) setDb(0)
+  }}
   {onkeydown}
 >
   <div class="slot"></div>

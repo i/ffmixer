@@ -47,11 +47,15 @@ What going live can and can't touch:
   Settings panel: Stereo, Width, MS Proc, Phase L/R (Phase for mono).
 - Output strips: volume, balance, mute, and a Settings panel with
   Phase L/R. Mono outputs, Talkback, No Trim and Loopback are shown but
-  disabled until their features exist.
+  disabled until their features exist (Loopback: see the reference doc).
+- Double-click a strip's name (or press F2 on it) to rename it. Names are
+  display only and saved to `$XDG_CONFIG_HOME/totalnix/names.json`; an
+  empty name restores the original.
 - Control Strip: mute/solo masters (clear, then restore), RMS readouts.
-- Faders move only when dragged; clicks never change a level, so a
-  misclick cannot jump a route to 0 dB. Drag is relative (no jump to
-  the pointer), Shift drags finely, wheel and arrow keys step.
+- Single clicks never change a level. Faders move by a relative drag
+  (no jump to the pointer; Shift for fine), wheel or arrow keys.
+  Double-click (or Home) sets 0 dB, except on the AN 1/2 output, which
+  feeds the main monitors.
 - Knob gestures follow the TotalMix manual: drag, wheel, Shift for
   fine, double-click or Ctrl+click to centre, Shift/Shift+Ctrl+click
   for hard left/right.

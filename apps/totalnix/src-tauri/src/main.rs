@@ -5,6 +5,7 @@
 //! writer thread sends the model to the unit's fader matrices (and
 //! nothing else) under the rules in `mixer_core::writes`.
 
+mod channel_names;
 mod hardware;
 mod meters;
 mod session;
@@ -16,6 +17,7 @@ use std::thread;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use channel_names::{ChannelNames, NameRow};
 use session::{Action, Session};
 use view::ViewState;
 
@@ -73,6 +75,27 @@ fn reload_from_unit(session: State<'_, SharedSession>) -> Result<ViewState, Stri
     Ok(ViewState::from_session(&session))
 }
 
+/// Renames a source strip (`index` = its first channel) or an output
+/// pair; `None` or blank restores the default name. Saved at once.
+#[tauri::command]
+fn rename(
+    row: NameRow,
+    index: usize,
+    name: Option<String>,
+    app: AppHandle,
+    session: State<'_, SharedSession>,
+) -> Result<ViewState, String> {
+    let mut session = session.lock().expect("session lock");
+    session.names.set(row, index, name.as_deref())?;
+    let view = ViewState::from_session(&session);
+    if let Err(e) = session.names.save() {
+        // The name still shows; say it won't survive a restart.
+        let _ = app.emit(STATE_EVENT, view);
+        return Err(format!("Renamed, but could not save names: {e}"));
+    }
+    Ok(view)
+}
+
 /// Reads the unit's mix in the background; falls back to demo mode.
 fn load_session(
     app: AppHandle,
@@ -106,14 +129,17 @@ fn apply_webkit_workarounds() {
 
 fn main() {
     apply_webkit_workarounds();
-    let session: SharedSession = Arc::new(Mutex::new(Session::loading()));
+    let mut initial = Session::loading();
+    initial.names = ChannelNames::load();
+    let session: SharedSession = Arc::new(Mutex::new(initial));
     tauri::Builder::default()
         .manage(session.clone())
         .invoke_handler(tauri::generate_handler![
             get_state,
             apply,
             set_live,
-            reload_from_unit
+            reload_from_unit,
+            rename
         ])
         .setup(move |app| {
             let handle = app.app_handle().clone();

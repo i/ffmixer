@@ -108,11 +108,19 @@ How totalnix implements these on the FF800 (all in `mixer-core`):
   inverts every crosspoint feeding that output channel instead, which
   sounds identical.
 - **Not yet:** mono outputs, Talkback and No Trim (need Control Room and
-  Trim). **Loopback** looks like a hardware switch: FFADO's
-  `RME_FF_OUTPUT_REC_MASK` (`0x801c0080`, write-only, one flag per
-  output) is commented "record outputs", but FFADO only sets all flags
-  together and does not expose it on D-Bus. Needs hardware writes and a
-  test.
+  Trim).
+- **Loopback: not possible yet.** FFADO's `RME_FF_OUTPUT_REC_MASK`
+  (`0x801c0080`, write-only, one little-endian quadlet per channel) is
+  a *record mute*, not loopback. Measured on this FF800 with a tone
+  routed to several outputs and all 28 capture channels recorded through
+  PipeWire: setting flag *n* turns capture channel *n* into digital
+  silence (direct order, 1 = muted), but the output's signal does not
+  appear in its place. That is half of what the manual describes (§27.5:
+  the input stops reaching the recording software). It mirrors
+  `RME_FF_CHANNEL_MUTE_MASK` at `0x801c0000`, which the kernel driver
+  uses for playback. FFADO only ever clears the mask at startup, and the
+  kernel driver and snd-firewire-ctl-services don't touch it. How the
+  unit sends the output instead is not documented by any Linux project.
 - Import does not reconstruct width, M/S or output phase; they come
   back as mono strips and per-source phase (same sound).
 
@@ -136,14 +144,15 @@ Gestures:
 | Shift+click narrow or settings button | Apply to every channel to the right |
 | Right-click any channel | Open Channel Layout with that channel preselected |
 
-**totalnix departs from this on purpose: no click may change a level.**
-A single misclick that jumps a route from −∞ to 0 dB can damage hearing
-or equipment. Faders move only by a relative drag (after a few pixels
-of travel), the wheel, or the keyboard; clicking the track or thumb,
-Ctrl+click and double-click do nothing. Any future control that sets a
-gain (matrix cells, value fields) follows the same rule. Clicking
-anywhere on an output strip selects its submix, which is safe because
-selection changes only what the UI edits.
+**totalnix departs from this on purpose: single clicks never change a
+level.** A misclick that jumps a route from −∞ to 0 dB can damage
+hearing or equipment. Faders move by a relative drag (after a few pixels
+of travel), the wheel, or the keyboard; clicking the track or thumb and
+Ctrl+click do nothing. Double-click sets 0 dB (it does not toggle to
+−∞); the AN 1/2 output fader, which feeds the main monitors, has no
+double-click or Home shortcut. Clicking anywhere on an output strip
+selects its submix, which is safe because selection changes only what
+the UI edits.
 
 ### 2. Hardware output context menu (manual p69)
 

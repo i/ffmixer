@@ -1,6 +1,9 @@
-// Mirrors `src-tauri/src/view.rs`, `session.rs` and `meters.rs`.
+// Mirrors `src-tauri/src/view.rs`, `session.rs`, `channel_names.rs` and `meters.rs`.
 
 export type SourceKind = 'input' | 'playback'
+
+/** Which row a renamed strip is in (`channel_names.rs`). */
+export type NameRow = SourceKind | 'output'
 
 export type Mode = 'loading' | 'hardware' | 'demo'
 
@@ -8,7 +11,9 @@ export interface StripView {
   kind: SourceKind
   channel: number
   stereo: boolean
+  /** Custom name if set, else the channel's own name. */
   name: string
+  defaultName: string
   /** Send level into the selected submix; null is −∞. */
   gainDb: number | null
   pan: number
@@ -26,6 +31,7 @@ export interface StripView {
 export interface OutputView {
   pair: number
   name: string
+  defaultName: string
   volumeDb: number | null
   balance: number
   muted: boolean

@@ -2,12 +2,17 @@
   Hardware output strip (row 3). Pressing anywhere on the strip selects
   this output's submix (manual §25.2); the selected output is bright,
   others darkened. The name button is the keyboard-accessible way to
-  select. Selecting only changes what the UI edits, never the sound.
+  select, and double-click renames. Selecting only changes what the UI
+  edits, never the sound.
+
+  AN 1/2 (pair 0) feeds the main monitors, so its fader has no
+  double-click / Home jump to 0 dB.
 -->
 <script lang="ts">
-  import { send } from '../lib/backend.svelte'
+  import { rename, send } from '../lib/backend.svelte'
   import { formatGain } from '../lib/scale'
   import type { OutputView } from '../lib/types'
+  import ChannelName from './ChannelName.svelte'
   import Fader from './Fader.svelte'
   import Knob from './Knob.svelte'
   import LevelReadout from './LevelReadout.svelte'
@@ -43,12 +48,13 @@
     class:silenced={output.muted}
     onpointerdowncapture={select}
   >
-    <button
-      class="name"
-      aria-pressed={selected}
-      title={`Select submix ${output.name}`}
-      onclick={select}
-    >{output.name}</button>
+    <ChannelName
+      name={output.name}
+      defaultName={output.defaultName}
+      {selected}
+      onselect={select}
+      onrename={(name) => rename('output', output.pair, name)}
+    />
     <Knob
       value={output.balance}
       label={`Balance ${output.name}`}
@@ -70,6 +76,7 @@
         db={output.volumeDb}
         label={`${output.name} volume`}
         onchange={(db) => send({ type: 'setOutputVolume', output: output.pair, db })}
+        unityShortcuts={output.pair !== 0}
       />
       <SettingsButton open={settingsOpen} ontoggle={() => (settingsOpen = !settingsOpen)} />
     </div>
@@ -112,7 +119,7 @@
       <button
         class="toggle wide"
         disabled
-        title="Loopback needs hardware writes (FF800 record mask register, untested)"
+        title="Not available yet: the FF800's record mask only silences the input's recording; how the unit sends the output in its place is unknown"
       >Loopback</button>
     </div>
   {/if}
@@ -136,24 +143,6 @@
   }
   .strip.silenced .body {
     opacity: 0.45;
-  }
-  .name {
-    font-size: 11px;
-    padding: 2px 0;
-    border: none;
-    border-radius: 3px;
-    color: var(--text);
-    background: transparent;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .name:hover {
-    background: rgba(255, 255, 255, 0.06);
-  }
-  .name[aria-pressed='true'] {
-    color: #111;
-    background: var(--accent);
-    font-weight: 600;
   }
   .buttons {
     display: flex;

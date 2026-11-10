@@ -3,6 +3,7 @@
 use mixer_core::{OUTPUT_PAIRS, SourceKind, law, names};
 use serde::Serialize;
 
+use crate::channel_names::NameRow;
 use crate::session::{Mode, Session};
 
 #[derive(Clone, Serialize)]
@@ -31,6 +32,8 @@ pub struct StripView {
     pub channel: usize,
     pub stereo: bool,
     pub name: String,
+    /// The channel's own name, shown when `name` is a custom one.
+    pub default_name: String,
     /// Send level into the selected submix; `None` is −∞.
     pub gain_db: Option<f64>,
     pub pan: f64,
@@ -52,6 +55,7 @@ pub struct StripView {
 pub struct OutputView {
     pub pair: usize,
     pub name: String,
+    pub default_name: String,
     pub volume_db: Option<f64>,
     pub balance: f64,
     pub muted: bool,
@@ -65,9 +69,11 @@ impl ViewState {
         let mixer = &session.mixer;
         let selected = mixer.selected_output;
         let strips = |kind: SourceKind| {
-            let single = match kind {
-                SourceKind::Input => names::input_name,
-                SourceKind::Playback => names::output_name,
+            let (single, row) = match kind {
+                SourceKind::Input => (names::input_name as fn(usize) -> String, NameRow::Input),
+                SourceKind::Playback => {
+                    (names::output_name as fn(usize) -> String, NameRow::Playback)
+                }
             };
             mixer
                 .strips(kind)
@@ -82,15 +88,20 @@ impl ViewState {
                         vec![strip.channel]
                     };
                     let send = source.sends[selected];
+                    let default_name = if strip.stereo {
+                        names::pair_name(strip.channel, single)
+                    } else {
+                        single(strip.channel)
+                    };
                     StripView {
                         kind,
                         channel: strip.channel,
                         stereo: strip.stereo,
-                        name: if strip.stereo {
-                            names::pair_name(strip.channel, single)
-                        } else {
-                            single(strip.channel)
-                        },
+                        name: session
+                            .names
+                            .get(row, strip.channel)
+                            .map_or_else(|| default_name.clone(), str::to_owned),
+                        default_name,
                         gain_db: law::gain_to_db(send.gain),
                         pan: send.pan,
                         muted: source.muted,
@@ -110,9 +121,14 @@ impl ViewState {
         let outputs = (0..OUTPUT_PAIRS)
             .map(|pair| {
                 let output = mixer.outputs[pair];
+                let default_name = names::pair_name(2 * pair, names::output_name);
                 OutputView {
                     pair,
-                    name: names::pair_name(2 * pair, names::output_name),
+                    name: session
+                        .names
+                        .get(NameRow::Output, pair)
+                        .map_or_else(|| default_name.clone(), str::to_owned),
+                    default_name,
                     volume_db: law::gain_to_db(output.volume),
                     balance: output.balance,
                     muted: output.muted,

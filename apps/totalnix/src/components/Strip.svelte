@@ -1,11 +1,13 @@
 <!--
   Input or playback channel strip (manual §25.3). In Submix view the
   fader, pan and routing field all refer to the selected output.
+  Double-click the name to rename the strip.
 -->
 <script lang="ts">
-  import { send } from '../lib/backend.svelte'
+  import { rename, send } from '../lib/backend.svelte'
   import { formatGain } from '../lib/scale'
   import type { MeterRow, StripView } from '../lib/types'
+  import ChannelName from './ChannelName.svelte'
   import Fader from './Fader.svelte'
   import Knob from './Knob.svelte'
   import LevelReadout from './LevelReadout.svelte'
@@ -41,7 +43,11 @@
     class:silenced={strip.muted || silencedBySolo}
     class:unrouted={!strip.routed}
   >
-    <div class="name" title={strip.name}>{strip.name}</div>
+    <ChannelName
+      name={strip.name}
+      defaultName={strip.defaultName}
+      onrename={(name) => rename(strip.kind, strip.channel, name)}
+    />
     <Knob
       value={strip.pan}
       label={`${strip.stereo ? 'Balance' : 'Pan'} ${strip.name}`}
@@ -144,15 +150,6 @@
   .strip.silenced .body,
   .strip.silenced .gain {
     opacity: 0.45;
-  }
-  .name {
-    font-size: 11px;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--text);
-    padding: 1px 0;
   }
   .buttons {
     display: flex;
