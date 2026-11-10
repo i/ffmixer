@@ -1,6 +1,9 @@
-<!-- Fixed right-hand Control Strip (manual §25.5). -->
+<!--
+  Fixed right-hand Control Strip (manual §25.5), plus the switch that
+  starts and stops sending edits to the unit. It is off at every launch.
+-->
 <script lang="ts">
-  import { send, session } from '../lib/backend.svelte'
+  import { reloadFromUnit, send, session, setLive } from '../lib/backend.svelte'
   import { viewOptions } from '../lib/viewOptions.svelte'
   import type { ViewState } from '../lib/types'
 
@@ -10,23 +13,72 @@
 
   let { view }: Props = $props()
 
+  /** Waiting on go-live or reload (about a second of D-Bus reads). */
+  let busy = $state(false)
+  /** Asking whether to send edits made while read-only. */
+  let confirming = $state(false)
+
   const modeLabel = $derived(
-    { loading: 'Loading…', hardware: 'Read-only', demo: 'Demo' }[view.mode],
+    view.live ? 'Live' : { loading: 'Loading…', hardware: 'Read-only', demo: 'Demo' }[view.mode],
   )
+  const pending = $derived(view.pendingChanges ?? 0)
+
+  async function run(task: () => Promise<void>): Promise<void> {
+    busy = true
+    confirming = false
+    try {
+      await task()
+    } finally {
+      busy = false
+    }
+  }
+
+  function goLive(): void {
+    if (pending > 0) confirming = true
+    else void run(() => setLive(true))
+  }
 </script>
 
 <aside class="control-strip" aria-label="Control strip">
   <div class="device">
     <div class="device-name">Fireface 800</div>
     <div class="device-id">{view.device}</div>
-    <div class="badge" data-mode={view.mode}>{modeLabel}</div>
+    <div class="badge" data-mode={view.live ? 'live' : view.mode}>{modeLabel}</div>
   </div>
 
   <p class="status">{view.status}</p>
-  {#if view.pendingChanges !== null}
-    <p class="pending" title="Crosspoints that would change on the unit if writes were enabled">
-      {view.pendingChanges === 0 ? 'In sync with unit' : `${view.pendingChanges} unsent changes`}
-    </p>
+
+  {#if view.mode === 'hardware'}
+    <div class="sync" role="group" aria-label="Send to unit">
+      {#if view.live}
+        <p class="pending" aria-live="polite">
+          {pending === 0 ? 'In sync with unit' : `Sending ${pending} changes…`}
+        </p>
+        <button class="toggle wide live" aria-pressed="true" disabled={busy} onclick={() => run(() => setLive(false))}>
+          Stop sending
+        </button>
+      {:else if confirming}
+        <p class="pending">Send {pending} changes made while read-only?</p>
+        <button class="toggle wide" onclick={() => run(() => setLive(true))}>Send them</button>
+        <button class="toggle wide" onclick={() => run(async () => {
+          await reloadFromUnit()
+          await setLive(true)
+        })}>Reload from unit, then go live</button>
+        <button class="toggle wide" onclick={() => (confirming = false)}>Cancel</button>
+      {:else}
+        <p class="pending" title="Crosspoints that differ from the unit">
+          {pending === 0 ? 'In sync with unit' : `${pending} unsent changes`}
+        </p>
+        <button class="toggle wide" disabled={busy} onclick={goLive}>
+          {busy ? 'Connecting…' : 'Go live'}
+        </button>
+        {#if pending > 0}
+          <button class="toggle wide" disabled={busy} onclick={() => run(reloadFromUnit)}>
+            Reload from unit
+          </button>
+        {/if}
+      {/if}
+    </div>
   {/if}
   {#if session.error}
     <p class="error" role="alert">{session.error}</p>
@@ -121,6 +173,22 @@
   }
   .badge[data-mode='demo'] {
     background: var(--accent);
+  }
+  .badge[data-mode='live'] {
+    color: #fff;
+    background: var(--over);
+  }
+  .sync {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sync .toggle {
+    height: 22px;
+  }
+  .toggle.live[aria-pressed='true'] {
+    color: #fff;
+    background: var(--over);
   }
   .status,
   .pending,

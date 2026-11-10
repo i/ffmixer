@@ -9,15 +9,32 @@ design and the hardware/FFADO findings.
 | Path | Purpose |
 |---|---|
 | `apps/totalnix` | Tauri v2 app: Svelte/TypeScript UI in `src/`, Rust shell in `src-tauri/`. |
-| `crates/mixer-core` | The TotalMix submix model: sends, pan/balance law, mute, solo, stereo pairs. Renders hardware crosspoints and imports them back. No I/O. |
-| `crates/ffado-dbus` | Read-only client for `ffado-dbus-server`. Only getter methods are allowed (`READ_METHODS`). |
+| `crates/mixer-core` | The TotalMix submix model: sends, pan/balance law, mute, solo, stereo pairs. Renders hardware crosspoints, imports them back, and plans safe (ramped) writes. No I/O. |
+| `crates/ffado-dbus` | Client for `ffado-dbus-server`. `FfadoReader` calls getters only (`READ_METHODS`); `writer::FfadoWriter` can set fader-matrix gains and nothing else. |
 | `crates/fw-meter` | Read-only Fireface 800 level meters via `/dev/fw*`. Sends block reads only. |
-| `crates/ffado-probe` | Prints controls, non-silent mixer routes and a few seconds of meters. |
+| `crates/ffado-probe` | Read-only: prints controls, non-silent mixer routes and a few seconds of meters. |
 
-**Nothing in the workspace can write to the device yet.** The app adopts
-the mix FFADO reports, shows live hardware meters, and edits an
-in-memory copy; the Control Strip shows how many crosspoints differ from
-the unit. Without a unit it starts in demo mode with simulated meters.
+**The app starts read-only every time.** It adopts the mix FFADO
+reports, shows live hardware meters, and edits an in-memory copy; the
+Control Strip shows how many crosspoints differ from the unit. **Go
+live** re-reads the unit and from then on sends every edit, until
+**Stop sending** or an error. Edits made while read-only can be sent or
+discarded (**Reload from unit**). Without a unit it starts in demo mode
+with simulated meters.
+
+What going live can and can't touch:
+
+- Only the three fader matrices (input, playback and output gains).
+  Flash, 48V, levels, clock and FFADO's own flags are unreachable.
+- Every gain is checked: whole number, at most +6 dB, crosspoint in
+  range. Increases ramp at 3 dB per 10 ms; decreases are immediate.
+- Going live is refused if FFADO has mute/invert flags set, since FFADO
+  would apply them to what we send.
+- Writes go to the running server's unique bus name, so a crashed
+  server is never silently restarted (a new server reloads the flash
+  mix). The app checks once a second and stops sending if it changed.
+- Nothing is stored to flash: the unit loses the mix on power-off, and
+  restarting `ffado-dbus-server` reloads the flash mix.
 
 ## What the app does so far
 
@@ -54,6 +71,7 @@ WebKitGTK's DMA-BUF renderer crashed on Wayland here (NVIDIA).
 
 ```bash
 cargo test --workspace
+cargo test -p totalnix -- --ignored   # go-live checks against the running server (reads only)
 cargo run -p ffado-probe -- 5    # 5 s of meters; 0 skips them
 
 cd apps/totalnix

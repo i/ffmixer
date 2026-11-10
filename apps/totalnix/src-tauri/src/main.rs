@@ -1,13 +1,15 @@
 //! totalnix: a TotalMix FX-style mixer for the RME Fireface 800.
 //!
-//! This build never writes to the unit. It adopts the mix
-//! `ffado-dbus-server` reports, shows live hardware meters, and lets the
-//! UI edit an in-memory copy of the mix.
+//! It adopts the mix `ffado-dbus-server` reports and shows live hardware
+//! meters. It starts read-only every time; after the user goes live, the
+//! writer thread sends the model to the unit's fader matrices (and
+//! nothing else) under the rules in `mixer_core::writes`.
 
 mod hardware;
 mod meters;
 mod session;
 mod view;
+mod writer;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -17,9 +19,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use session::{Action, Session};
 use view::ViewState;
 
-const STATE_EVENT: &str = "state";
+pub(crate) const STATE_EVENT: &str = "state";
 
-type SharedSession = Arc<Mutex<Session>>;
+pub(crate) type SharedSession = Arc<Mutex<Session>>;
 
 #[tauri::command]
 fn get_state(session: State<'_, SharedSession>) -> ViewState {
@@ -33,6 +35,41 @@ fn apply(
 ) -> Result<ViewState, String> {
     let mut session = session.lock().expect("session lock");
     session.apply(action)?;
+    Ok(ViewState::from_session(&session))
+}
+
+/// Starts or stops sending to the unit. Going live re-reads the unit
+/// first, which takes about a second.
+#[tauri::command(async)]
+fn set_live(
+    value: bool,
+    session: State<'_, SharedSession>,
+) -> Result<ViewState, String> {
+    if !value {
+        let mut session = session.lock().expect("session lock");
+        session.go_offline(None);
+        return Ok(ViewState::from_session(&session));
+    }
+    let guid = session.lock().expect("session lock").device.clone();
+    let (link, unit) = hardware::open_link(&guid)?;
+    let mut session = session.lock().expect("session lock");
+    session.go_live(Box::new(link), unit)?;
+    Ok(ViewState::from_session(&session))
+}
+
+/// Discards edits: replaces the model with a fresh read of the unit.
+#[tauri::command(async)]
+fn reload_from_unit(session: State<'_, SharedSession>) -> Result<ViewState, String> {
+    let guid = {
+        let session = session.lock().expect("session lock");
+        if session.mode != session::Mode::Hardware {
+            return Err("no unit to reload from".to_owned());
+        }
+        session.device.clone()
+    };
+    let unit = hardware::read_mix(&guid)?;
+    let mut session = session.lock().expect("session lock");
+    session.reload(unit);
     Ok(ViewState::from_session(&session))
 }
 
@@ -72,10 +109,16 @@ fn main() {
     let session: SharedSession = Arc::new(Mutex::new(Session::loading()));
     tauri::Builder::default()
         .manage(session.clone())
-        .invoke_handler(tauri::generate_handler![get_state, apply])
+        .invoke_handler(tauri::generate_handler![
+            get_state,
+            apply,
+            set_live,
+            reload_from_unit
+        ])
         .setup(move |app| {
             let handle = app.app_handle().clone();
             load_session(handle.clone(), session.clone());
+            writer::spawn(handle.clone(), session.clone());
             meters::spawn(handle, session);
             Ok(())
         })

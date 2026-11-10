@@ -19,6 +19,8 @@ pub struct ViewState {
     pub any_soloed: bool,
     /// Crosspoints that differ from the unit; `None` in demo mode.
     pub pending_changes: Option<usize>,
+    /// True while edits are being sent to the unit.
+    pub live: bool,
     pub warnings: Vec<String>,
 }
 
@@ -135,6 +137,7 @@ impl ViewState {
             any_muted: mixer.any_muted(),
             any_soloed: mixer.any_soloed(),
             pending_changes: session.pending_changes(),
+            live: session.is_live(),
             warnings: session.warnings.clone(),
         }
     }

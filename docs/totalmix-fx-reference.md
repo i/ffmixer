@@ -327,6 +327,25 @@ Discrete values seen: `Input_level` 2 (+4 dBu), `Output_level` 1
 the one in flash. Anything changed since the last flash store (by
 TotalMix on another machine, or by stand-alone MIDI control) is lost.
 
+### Writing
+
+`setValue(row, col, value)` on a fader matrix: `row` is the output
+channel (always 0 for `OutputFaders`), `col` the source (or output)
+channel, value on the D-Bus scale. FFADO doubles it, then applies its
+own per-crosspoint flags (`Mixer/*Mutes` force 0, `Mixer/*Inverts` flip
+the sign), then writes the mixer register. It returns −1 only for
+argument errors; FireWire write failures are logged, not reported. Its
+channel bounds check is `>` instead of `>=`, so callers must validate.
+
+FFADO's `setMixerGain` comments warn that the hardware briefly plays
+"much higher" when a gain goes from 0 to −1 or changes phase, and
+avoids 0 on inverted routes. **Not reproduced on this FF800:** with a
+−20 dBFS tone on playback 1 and Line out 1 sampled every 5 ms for 600
+ms after each write, none of +g→−g, −g→+g, 0→−1, −1→0, 0→−g or −g→0
+peaked above the steady level. Halving Line out 1's volume dropped its
+meter by exactly 6.0 dB. totalnix therefore writes sign changes
+directly.
+
 ## Where state lives
 
 | State | Owner |

@@ -74,3 +74,26 @@ export async function connect(): Promise<void> {
   })
   session.view = await invoke<ViewState>('get_state')
 }
+
+/** Runs a command that replaces the whole view, e.g. going live. */
+async function command(
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    session.view = await invoke<ViewState>(name, args)
+    session.error = ''
+  } catch (error) {
+    session.error = String(error)
+  }
+}
+
+/** Starts or stops sending edits to the unit. */
+export function setLive(value: boolean): Promise<void> {
+  return command('set_live', { value })
+}
+
+/** Discards edits and re-reads the unit's mix. */
+export function reloadFromUnit(): Promise<void> {
+  return command('reload_from_unit')
+}

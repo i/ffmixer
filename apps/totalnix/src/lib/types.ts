@@ -45,6 +45,8 @@ export interface ViewState {
   anyMuted: boolean
   anySoloed: boolean
   pendingChanges: number | null
+  /** True while edits are being sent to the unit. */
+  live: boolean
   warnings: string[]
 }
 

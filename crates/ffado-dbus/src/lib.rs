@@ -1,21 +1,22 @@
-//! Read-only client for `ffado-dbus-server`.
+//! Client for `ffado-dbus-server`.
 //!
-//! This crate deliberately exposes **only getters**. Nothing here can
-//! change mixer state, device settings or flash contents: the only D-Bus
-//! methods it calls are the read methods listed in [`READ_METHODS`].
-//! Writing will live in a separate module with its own safety review.
+//! [`FfadoReader`] exposes **only getters**: the only D-Bus methods it
+//! calls are the read methods listed in [`READ_METHODS`]. All writing
+//! lives in [`writer`], which can change fader gains and nothing else.
+
+pub mod writer;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use zbus::blocking::Connection;
 use zbus::zvariant::{DynamicType, OwnedObjectPath, Type};
 
-const SERVICE: &str = "org.ffado.Control";
+pub(crate) const SERVICE: &str = "org.ffado.Control";
 const DEVICE_MANAGER_PATH: &str = "/org/ffado/Control/DeviceManager";
 
 const IFACE_CONTAINER: &str = "org.ffado.Control.Element.Container";
 const IFACE_DISCRETE: &str = "org.ffado.Control.Element.Discrete";
-const IFACE_MATRIX: &str = "org.ffado.Control.Element.MatrixMixer";
+pub(crate) const IFACE_MATRIX: &str = "org.ffado.Control.Element.MatrixMixer";
 
 /// Every D-Bus method this crate is allowed to call.
 ///
@@ -49,6 +50,10 @@ pub enum Error {
     /// A method outside [`READ_METHODS`] was requested.
     NotReadOnly(String),
     InvalidPath(String),
+    /// A write outside the hardware limits, or refused by the server.
+    Rejected(String),
+    /// The `ffado-dbus-server` the writer bound to is no longer running.
+    ServerGone,
 }
 
 impl std::fmt::Display for Error {
@@ -60,6 +65,8 @@ impl std::fmt::Display for Error {
             Error::DBus(e) => write!(f, "D-Bus error: {e}"),
             Error::NotReadOnly(m) => write!(f, "refusing non-read method `{m}`"),
             Error::InvalidPath(p) => write!(f, "invalid object path `{p}`"),
+            Error::Rejected(why) => write!(f, "write rejected: {why}"),
+            Error::ServerGone => write!(f, "ffado-dbus-server is not running"),
         }
     }
 }
@@ -190,7 +197,7 @@ pub fn gain_to_db(raw: f64) -> Option<f64> {
     }
 }
 
-fn device_path(
+pub(crate) fn device_path(
     guid: &str,
     control: &str,
 ) -> String {

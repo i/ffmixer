@@ -1,18 +1,39 @@
 //! The app's mixer session: the model, where it came from, and the
 //! actions the UI may apply to it.
 //!
-//! Writes to the hardware are **not implemented**. Every action only
-//! changes the in-memory model; `pending_changes` reports how many
-//! crosspoints would change on the unit if writes were enabled.
+//! Actions only change the in-memory model. While the session is
+//! **live** (see [`Session::go_live`]), the writer thread calls
+//! [`Session::sync`] every tick, which sends the difference between the
+//! model and the unit through a [`GainSink`], under the safety rules of
+//! [`mixer_core::writes`]. Otherwise `pending_changes` reports how many
+//! crosspoints would change.
 
+use mixer_core::writes::{self, Write};
 use mixer_core::{Crosspoints, Mixer, SourceKind, law};
 use serde::Deserialize;
+
+const READ_ONLY_STATUS: &str = "Read-only: changes are not sent to the unit";
+const LIVE_STATUS: &str = "Live: changes are sent to the unit";
+
+/// Gains sent per tick at most; the rest follow on the next tick.
+const WRITES_PER_TICK: usize = 64;
+
+/// Where accepted writes go: `ffado-dbus-server`, or a fake in tests.
+pub trait GainSink: Send {
+    fn set_gain(
+        &self,
+        write: &Write,
+    ) -> Result<(), String>;
+
+    /// False once the server we bound to has been replaced or is gone.
+    fn server_unchanged(&self) -> Result<bool, String>;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     /// Reading the mix from `ffado-dbus-server`.
     Loading,
-    /// Mix adopted from the unit; meters are live; nothing is written.
+    /// Mix adopted from the unit; meters are live. Writes only while live.
     Hardware,
     /// No unit available: default mix and simulated meters.
     Demo,
@@ -23,9 +44,11 @@ pub struct Session {
     pub device: String,
     pub status: String,
     pub mixer: Mixer,
-    /// Crosspoints read from the unit, for the pending-changes count.
+    /// What the unit holds: read from it, then updated by every write.
     pub hardware: Option<Crosspoints>,
     pub warnings: Vec<String>,
+    /// Present while live: every model change is sent to the unit.
+    link: Option<Box<dyn GainSink>>,
     /// Strips whose mute/solo the master buttons switched off, so the
     /// next click can restore them (manual §25.5).
     mute_memory: Vec<(SourceKind, usize)>,
@@ -114,6 +137,7 @@ impl Session {
             mixer: Mixer::default(),
             hardware: None,
             warnings: Vec::new(),
+            link: None,
             mute_memory: Vec::new(),
             solo_memory: Vec::new(),
         }
@@ -124,25 +148,107 @@ impl Session {
         guid: String,
         crosspoints: Crosspoints,
     ) {
-        let (mixer, report) = mixer_core::import(&crosspoints);
         self.mode = Mode::Hardware;
-        self.status = "Read-only: changes are not sent to the unit".to_owned();
+        self.status = READ_ONLY_STATUS.to_owned();
         self.device = guid;
+        self.reload(crosspoints);
+    }
+
+    /// Replaces the model with the unit's current mix, keeping the
+    /// selected output and live state. Nothing is left to send.
+    pub fn reload(
+        &mut self,
+        crosspoints: Crosspoints,
+    ) {
+        let (mut mixer, report) = mixer_core::import(&crosspoints);
+        mixer.selected_output = self.mixer.selected_output;
         self.mixer = mixer;
         self.hardware = Some(crosspoints);
         self.warnings = report.warnings;
+        self.mute_memory.clear();
+        self.solo_memory.clear();
     }
 
     pub fn enter_demo(
         &mut self,
         reason: String,
     ) {
+        self.go_offline(None);
         self.mode = Mode::Demo;
         self.status = format!("Demo mode: {reason}");
         self.device = "Demo".to_owned();
         self.mixer = Mixer::default();
         self.hardware = None;
         self.warnings.clear();
+    }
+
+    pub fn is_live(&self) -> bool {
+        self.link.is_some()
+    }
+
+    /// Starts sending. `unit` is a fresh read of the unit, so changes
+    /// made elsewhere since loading are not mistaken for ours.
+    pub fn go_live(
+        &mut self,
+        link: Box<dyn GainSink>,
+        unit: Crosspoints,
+    ) -> Result<(), String> {
+        if self.mode != Mode::Hardware {
+            return Err("no unit to send to".to_owned());
+        }
+        self.hardware = Some(unit);
+        self.link = Some(link);
+        self.status = LIVE_STATUS.to_owned();
+        Ok(())
+    }
+
+    /// Stops sending. `reason` replaces the status line if given.
+    pub fn go_offline(
+        &mut self,
+        reason: Option<String>,
+    ) {
+        self.link = None;
+        if self.mode == Mode::Hardware {
+            self.status = reason.unwrap_or_else(|| READ_ONLY_STATUS.to_owned());
+        }
+    }
+
+    /// One writer tick: sends the next safe step toward the model.
+    /// Any failure drops out of live mode rather than retrying.
+    pub fn sync(&mut self) {
+        let (Some(link), Some(unit)) = (&self.link, &mut self.hardware) else {
+            return;
+        };
+        let plan = writes::plan(unit, &self.mixer.render(), WRITES_PER_TICK);
+        let mut failure = None;
+        for write in &plan.writes {
+            if let Err(e) = link.set_gain(write) {
+                failure = Some(e);
+                break;
+            }
+            writes::apply(unit, write);
+        }
+        if let Some(e) = failure {
+            self.go_offline(Some(format!("Stopped sending: {e}")));
+        }
+    }
+
+    /// Drops out of live mode if `ffado-dbus-server` was replaced: a new
+    /// server reloads the flash mix onto the unit, so our record of the
+    /// unit would be wrong.
+    pub fn check_link(&mut self) {
+        let Some(link) = &self.link else {
+            return;
+        };
+        match link.server_unchanged() {
+            Ok(true) => {}
+            Ok(false) => self.go_offline(Some(
+                "Stopped sending: ffado-dbus-server restarted and reloaded the flash mix. \
+                 Reload from unit, or go live to send this mix again."
+                    .to_owned(),
+            )),
+            Err(e) => self.go_offline(Some(format!("Stopped sending: {e}"))),
+        }
     }
 
     /// Crosspoints the unit would need to change to match the model.
@@ -327,5 +433,121 @@ mod tests {
             let action: Result<Action, _> = serde_json::from_str(json);
             assert!(action.is_ok(), "{json}: {action:?}");
         }
+    }
+
+    use std::sync::{Arc, Mutex};
+
+    /// Records writes; fails once `fail_after` writes have succeeded.
+    struct FakeSink {
+        sent: Arc<Mutex<Vec<Write>>>,
+        fail_after: usize,
+        server_unchanged: bool,
+    }
+
+    impl GainSink for FakeSink {
+        fn set_gain(
+            &self,
+            write: &Write,
+        ) -> Result<(), String> {
+            let mut sent = self.sent.lock().unwrap();
+            if sent.len() >= self.fail_after {
+                return Err("bus error".to_owned());
+            }
+            sent.push(*write);
+            Ok(())
+        }
+
+        fn server_unchanged(&self) -> Result<bool, String> {
+            Ok(self.server_unchanged)
+        }
+    }
+
+    fn live(
+        fail_after: usize,
+        server_unchanged: bool,
+    ) -> (Session, Arc<Mutex<Vec<Write>>>) {
+        let unit = Mixer::default().render();
+        let mut session = Session::loading();
+        session.adopt_hardware("guid".to_owned(), unit.clone());
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let sink = FakeSink {
+            sent: sent.clone(),
+            fail_after,
+            server_unchanged,
+        };
+        session.go_live(Box::new(sink), unit).unwrap();
+        (session, sent)
+    }
+
+    #[test]
+    fn live_session_converges_on_the_model() {
+        let (mut session, sent) = live(usize::MAX, true);
+        session
+            .apply(Action::SetSendGain {
+                kind: SourceKind::Input,
+                channel: 0,
+                db: Some(0.0),
+            })
+            .unwrap();
+        assert_eq!(session.pending_changes(), Some(2));
+        for _ in 0..40 {
+            session.sync();
+        }
+        assert_eq!(session.pending_changes(), Some(0));
+        assert!(session.is_live());
+        // Ramped, not one jump: many writes per side.
+        assert!(sent.lock().unwrap().len() > 10);
+    }
+
+    #[test]
+    fn failed_write_drops_out_of_live_mode() {
+        let (mut session, _) = live(0, true);
+        session
+            .apply(Action::SetOutputMuted {
+                output: 0,
+                value: true,
+            })
+            .unwrap();
+        session.sync();
+        assert!(!session.is_live());
+        assert!(session.status.contains("bus error"), "{}", session.status);
+    }
+
+    #[test]
+    fn server_restart_drops_out_of_live_mode() {
+        let (mut session, _) = live(usize::MAX, false);
+        session.check_link();
+        assert!(!session.is_live());
+        assert!(session.status.contains("restarted"));
+    }
+
+    #[test]
+    fn phase_changes_are_sent() {
+        let (mut session, sent) = live(usize::MAX, true);
+        session
+            .apply(Action::SetPhase {
+                kind: SourceKind::Playback,
+                channel: 0,
+                value: true,
+            })
+            .unwrap();
+        session.sync();
+        assert_eq!(session.pending_changes(), Some(0));
+        assert!(sent.lock().unwrap().iter().all(|write| write.value < 0.0));
+    }
+
+    #[test]
+    fn demo_cannot_go_live() {
+        let mut session = ready();
+        let sink = FakeSink {
+            sent: Arc::default(),
+            fail_after: 0,
+            server_unchanged: true,
+        };
+        assert!(
+            session
+                .go_live(Box::new(sink), Mixer::default().render())
+                .is_err()
+        );
     }
 }
