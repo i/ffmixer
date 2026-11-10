@@ -251,10 +251,28 @@ all report sensible levels.
 
 ### Gain scale and readback
 
-Mixer and output gains are linear: `0` = −∞, `1` ≈ −90.3 dB, `0x8000` =
-0 dB, `0x10000` = +6 dB. Negative values mean phase inverted. This is
-what FFADO (`fireface_hw.cpp`) and snd-firewire-ctl-services document;
-both are reverse-engineered and it is not yet verified on this unit.
+Gains are linear, and negative values mean phase inverted. There are
+two scales:
+
+| Layer | −∞ | 0 dB | +6 dB (max) |
+|---|---|---|---|
+| `ffado-dbus-server` (what we use) | `0` | `0x4000` | `0x8000` |
+| Hardware register | `0` | `0x8000` | `0x10000` |
+
+FFADO doubles D-Bus values before writing them
+(`RmeSettingsMatrixCtrl::setValue` in `fireface_settings_ctrls.cpp`).
+This was **verified on this unit** with a −20 dBFS, 1 kHz tone on
+playback 1 (`AUX0` of the PipeWire Pro Audio sink), which metered at
+−40.8 dB after the sink volume:
+
+| Path | D-Bus gains | Expected | Measured |
+|---|---|---|---|
+| pb1 → Line out 1 | route 16384, output 1060 | −64.6 | −64.6 |
+| pb2 → Line out 2 | route 16384, output 1011 | −65.0 | −65.0 |
+| pb1 → Line out 7 / Mon 9 / SPDIF 1 | 16384, 16384 | −40.8 | −40.8 |
+
+This also confirms that the 4-byte output meters are post-fader, and
+that playback meters show the level arriving from the computer.
 
 **The live mixer can't be read back; flash is the only copy on the unit.**
 Neither FFADO nor snd-firewire-ctl-services reads the mixer registers;
@@ -267,13 +285,8 @@ unless something else changes the mix later.
 Flash stores a volume and a pan value per stereo pair. FFADO splits them
 linearly (`fireface_flash.cpp`, `flash2faders`).
 
-**Unresolved gain-scale mismatch.** FFADO reports Instr/line 1–6 → ADAT-1
-out 1–6 at 16384 (−6 dB under the 0x8000 = 0 dB scale), and those
-outputs also at 16384. Yet over 28 steady reads, ADAT out 1–6 meter at
-*exactly* the level of inputs 1–6. Either 0x4000 is really unity on this
-path, or the 4-byte output meters are taken before the output fader and
-the crosspoint. Settle this with a known tone, read-only (see `ffado-probe`),
-before writing any gains.
+So the earlier "mismatch" was our mistake: we had applied the hardware
+scale to D-Bus values.
 
 Discrete values seen: `Input_level` 2 (+4 dBu), `Output_level` 1
 (+4 dBu), `Phones_level` 0 (high gain), `Phantom` 0, `sysclock_freq`

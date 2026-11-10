@@ -31,11 +31,17 @@ pub const READ_METHODS: &[&str] = &[
     "getColName",
 ];
 
-/// Hardware gain value that corresponds to 0 dB on RME Fireface mixers.
+/// D-Bus gain value that corresponds to 0 dB on RME Fireface mixers.
 ///
-/// The scale is linear: 0 is −∞, 1 is about −90.3 dB, 0x8000 is 0 dB and
-/// 0x10000 is +6 dB. Negative values mean the crosspoint is phase-inverted.
-pub const GAIN_UNITY: f64 = 32768.0;
+/// FFADO's D-Bus mixer values are half the hardware register values: it
+/// doubles them before writing (`RmeSettingsMatrixCtrl::setValue`). On
+/// D-Bus the scale is linear: 0 is −∞, 0x4000 is 0 dB and 0x8000
+/// ([`GAIN_MAX`]) is +6 dB. Negative values mean the crosspoint is
+/// phase-inverted. Confirmed on a FF800 with a test tone.
+pub const GAIN_UNITY: f64 = 16384.0;
+
+/// Largest D-Bus gain (+6 dB; hardware register 0x10000).
+pub const GAIN_MAX: f64 = 32768.0;
 
 #[derive(Debug)]
 pub enum Error {
@@ -221,6 +227,19 @@ mod tests {
     #[test]
     fn inverted_gain_keeps_magnitude() {
         assert_eq!(gain_to_db(-GAIN_UNITY), Some(0.0));
+    }
+
+    #[test]
+    fn max_is_plus_six_db() {
+        let db = gain_to_db(GAIN_MAX).unwrap();
+        assert!((db - 6.02).abs() < 0.01, "{db}");
+    }
+
+    #[test]
+    fn measured_output_fader_matches() {
+        // Line out 1 at 1060 measured 23.8 dB below its source.
+        let db = gain_to_db(1060.0).unwrap();
+        assert!((db + 23.8).abs() < 0.05, "{db}");
     }
 
     #[test]
