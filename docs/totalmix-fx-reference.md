@@ -253,24 +253,35 @@ all report sensible levels.
 
 Mixer and output gains are linear: `0` = −∞, `1` ≈ −90.3 dB, `0x8000` =
 0 dB, `0x10000` = +6 dB. Negative values mean phase inverted. This is
-confirmed by FFADO (`fireface_hw.cpp`) and snd-firewire-ctl-services.
+what FFADO (`fireface_hw.cpp`) and snd-firewire-ctl-services document;
+both are reverse-engineered and it is not yet verified on this unit.
 
-**FFADO's reported gains may not match the hardware.** The FF800 mixer
-registers can't be read back, so `getValue` returns FFADO's own copy,
-which it initialises from flash. On this unit FFADO reports Instr/line
-1–6 → ADAT-1 out 1–6 at −6 dB, and those outputs at −6 dB as well. Yet the
-meters show ADAT out 1–6 at *exactly* the same level as inputs 1–6,
-which means the real path is 0 dB. So for the mixer, the app must treat
-its own saved state as the source of truth and not trust FFADO's
-readback. Confirm this with a known test tone before relying on it.
+**The live mixer can't be read back; flash is the only copy on the unit.**
+Neither FFADO nor snd-firewire-ctl-services reads the mixer registers;
+both only write them. When `ffado-dbus-server` discovers the unit, it
+reads the mix saved in flash and **writes every crosspoint and output
+gain to the live mixer** (`init_hardware()` in `fireface_hw.cpp`). So
+right after the server starts, `getValue` should match the hardware,
+unless something else changes the mix later.
+
+Flash stores a volume and a pan value per stereo pair. FFADO splits them
+linearly (`fireface_flash.cpp`, `flash2faders`).
+
+**Unresolved gain-scale mismatch.** FFADO reports Instr/line 1–6 → ADAT-1
+out 1–6 at 16384 (−6 dB under the 0x8000 = 0 dB scale), and those
+outputs also at 16384. Yet over 28 steady reads, ADAT out 1–6 meter at
+*exactly* the level of inputs 1–6. Either 0x4000 is really unity on this
+path, or the 4-byte output meters are taken before the output fader and
+the crosspoint. Settle this with a known tone, read-only (see `ffado-probe`),
+before writing any gains.
 
 Discrete values seen: `Input_level` 2 (+4 dBu), `Output_level` 1
 (+4 dBu), `Phones_level` 0 (high gain), `Phantom` 0, `sysclock_freq`
 48000.
 
-**Caution:** FFADO's RME driver may write its own idea of the mixer state
-to the unit when it starts. Store the current state to flash before the
-first test, and keep monitors turned down.
+**Caution:** starting `ffado-dbus-server` overwrites the live mix with
+the one in flash. Anything changed since the last flash store (by
+TotalMix on another machine, or by stand-alone MIDI control) is lost.
 
 ## Where state lives
 
