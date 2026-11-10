@@ -1,4 +1,7 @@
-<!-- Tool symbol that opens a channel's Settings panel (manual §25.3). -->
+<!--
+  Tool symbol that opens a channel's Settings panel (manual §25.3).
+  Sits beside the fader, halfway up, as in TotalMix.
+-->
 <script lang="ts">
   interface Props {
     open: boolean
@@ -19,6 +22,6 @@
 
 <style>
   .icon {
-    align-self: flex-end;
+    align-self: center;
   }
 </style>
