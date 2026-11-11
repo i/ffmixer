@@ -58,15 +58,13 @@
       onselect={select}
       onrename={(name) => rename('output', output.channel, name)}
     />
-    {#if output.stereo}
-      <Knob
-        value={output.balance}
-        label={`Balance ${output.name}`}
-        onchange={(pan) => send({ type: 'setOutputBalance', output: output.channel, pan })}
-      />
-    {:else}
-      <div class="knob-space"></div>
-    {/if}
+    <Knob
+      value={output.balance}
+      label={`Balance ${output.name}`}
+      disabled={!output.stereo}
+      title={output.stereo ? undefined : 'A mono output has no balance'}
+      onchange={(pan) => send({ type: 'setOutputBalance', output: output.channel, pan })}
+    />
     <div class="buttons">
       <button
         class="toggle mute"
@@ -96,10 +94,17 @@
       <button
         class="toggle wide"
         aria-pressed={output.stereo}
-        title="Stereo or two mono outputs"
+        disabled={output.mono}
+        title={output.mono ? 'Turn Mono off before splitting into two outputs' : 'Stereo or two mono outputs'}
         onclick={() => send({ type: 'setOutputStereo', pair: output.pair, value: !output.stereo })}
       >Stereo</button>
       {#if output.stereo}
+        <button
+          class="toggle wide"
+          aria-pressed={output.mono}
+          title="Mono: mix left and right together and send the result to both sides"
+          onclick={() => send({ type: 'setOutputMono', output: output.channel, value: !output.mono })}
+        >Mono</button>
         <div class="phase-pair">
           <button
             class="toggle phase"
@@ -159,10 +164,6 @@
   }
   .strip.silenced .body {
     opacity: 0.45;
-  }
-  /* Keeps the rows aligned where a mono output has no balance knob. */
-  .knob-space {
-    height: 30px;
   }
   .buttons {
     display: flex;

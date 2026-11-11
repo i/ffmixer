@@ -133,6 +133,11 @@ pub enum Action {
         pair: usize,
         value: bool,
     },
+    /// Mixes a stereo output's left and right together on both sides.
+    SetOutputMono {
+        output: usize,
+        value: bool,
+    },
     /// Phase of one output channel (0–27).
     SetOutputPhase {
         channel: usize,
@@ -352,6 +357,7 @@ impl Session {
             Action::SetWidth { kind, pair, width } => mixer.set_width(kind, pair, width),
             Action::SetMsProc { kind, pair, value } => mixer.set_ms_proc(kind, pair, value),
             Action::SetOutputStereo { pair, value } => mixer.set_output_stereo(pair, value),
+            Action::SetOutputMono { output, value } => mixer.set_output_mono(output, value),
             Action::SetOutputPhase { channel, value } => mixer.set_output_phase(channel, value),
             Action::SetOutputVolume { output, db } => {
                 mixer.set_output_volume(output, law::db_to_gain(db))

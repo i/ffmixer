@@ -89,6 +89,8 @@ pub struct OutputView {
     /// Stereo pair the strip belongs to (`channel / 2`).
     pub pair: usize,
     pub stereo: bool,
+    /// Left and right are mixed together on both sides (stereo strips only).
+    pub mono: bool,
     pub name: String,
     pub default_name: String,
     pub volume_db: Option<f64>,
@@ -175,6 +177,7 @@ impl ViewState {
                     channel: strip.channel,
                     pair,
                     stereo: strip.stereo,
+                    mono: strip.stereo && output.mono,
                     name: session
                         .names
                         .get(NameRow::Output, strip.channel)

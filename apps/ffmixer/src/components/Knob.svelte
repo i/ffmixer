@@ -15,9 +15,20 @@
     format?: (value: number) => string
     /** Value for double-click, Ctrl+click and Home. */
     resetValue?: number
+    /** Dimmed and unresponsive; `title` should say why. */
+    disabled?: boolean
+    title?: string
   }
 
-  let { value, label, onchange, format = formatPan, resetValue = 0 }: Props = $props()
+  let {
+    value,
+    label,
+    onchange,
+    format = formatPan,
+    resetValue = 0,
+    disabled = false,
+    title,
+  }: Props = $props()
 
   const PIXELS_FOR_FULL_RANGE = 160
   const FAST_FACTOR = 4
@@ -31,12 +42,13 @@
   const shown = $derived(dragging ? local : value)
 
   function set(next: number): void {
+    if (disabled) return
     local = clamp(next, -1, 1)
     onchange(local)
   }
 
   function onpointerdown(event: PointerEvent): void {
-    if (event.button !== 0) return
+    if (disabled || event.button !== 0) return
     if (event.shiftKey) {
       set(event.ctrlKey ? 1 : -1)
       return
@@ -66,12 +78,14 @@
   }
 
   function onwheel(event: WheelEvent): void {
+    if (disabled) return
     event.preventDefault()
     const step = event.shiftKey ? 0.1 : 0.02
     set(shown + (event.deltaY < 0 ? step : -step))
   }
 
   function onkeydown(event: KeyboardEvent): void {
+    if (disabled) return
     const step = event.shiftKey ? 0.1 : 0.02
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') set(shown + step)
     else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') set(shown - step)
@@ -81,11 +95,12 @@
   }
 </script>
 
-<div class="knob-row">
+<div class="knob-row" class:disabled {title}>
   <div
     class="knob"
     role="slider"
-    tabindex="0"
+    tabindex={disabled ? -1 : 0}
+    aria-disabled={disabled}
     aria-label={label}
     aria-valuemin={-100}
     aria-valuemax={100}
@@ -124,6 +139,12 @@
     touch-action: none;
     outline: none;
     flex-shrink: 0;
+  }
+  .disabled {
+    opacity: 0.35;
+  }
+  .disabled .knob {
+    cursor: default;
   }
   .knob:focus-visible {
     box-shadow: 0 0 0 1px var(--focus);

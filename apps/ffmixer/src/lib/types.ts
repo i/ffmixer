@@ -34,6 +34,8 @@ export interface OutputView {
   /** Stereo pair the strip belongs to. */
   pair: number
   stereo: boolean
+  /** Left and right are mixed together on both sides (stereo strips only). */
+  mono: boolean
   name: string
   defaultName: string
   volumeDb: number | null
@@ -134,6 +136,7 @@ export type Action =
   | { type: 'setWidth'; kind: SourceKind; pair: number; width: number }
   | { type: 'setMsProc'; kind: SourceKind; pair: number; value: boolean }
   | { type: 'setOutputStereo'; pair: number; value: boolean }
+  | { type: 'setOutputMono'; output: number; value: boolean }
   | { type: 'setOutputPhase'; channel: number; value: boolean }
   | { type: 'setOutputVolume'; output: number; db: number | null }
   | { type: 'setOutputBalance'; output: number; pan: number }

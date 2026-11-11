@@ -50,15 +50,13 @@
       defaultName={strip.defaultName}
       onrename={(name) => rename(strip.kind, strip.channel, name)}
     />
-    {#if outputStereo}
-      <Knob
-        value={strip.pan}
-        label={`${strip.stereo ? 'Balance' : 'Pan'} ${strip.name}`}
-        onchange={(pan) => send({ type: 'setSendPan', kind: strip.kind, channel: strip.channel, pan })}
-      />
-    {:else}
-      <div class="knob-space"></div>
-    {/if}
+    <Knob
+      value={strip.pan}
+      label={`${strip.stereo ? 'Balance' : 'Pan'} ${strip.name}`}
+      disabled={!outputStereo}
+      title={outputStereo ? undefined : 'A mono output has no pan'}
+      onchange={(pan) => send({ type: 'setSendPan', kind: strip.kind, channel: strip.channel, pan })}
+    />
     <div class="buttons">
       <button
         class="toggle mute"
@@ -156,10 +154,6 @@
   .strip.silenced .body,
   .strip.silenced .gain {
     opacity: 0.45;
-  }
-  /* Keeps the rows aligned where a mono output has no pan knob. */
-  .knob-space {
-    height: 30px;
   }
   .buttons {
     display: flex;

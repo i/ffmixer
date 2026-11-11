@@ -64,8 +64,9 @@ Contributions and test reports for other models are welcome.
 - Submix mixer with pan or balance, mute, solo, stereo width, M/S and
   phase, and meters with peak hold.
 - Hardware output volume, balance, mute and phase. Each output pair can
-  be split into two mono outputs, like the input and playback rows. The
-  split is not remembered across restarts (the sound is the same).
+  be split into two mono outputs, like the input and playback rows, and a
+  stereo output has a **Mono** button that mixes left and right together
+  on both sides. Neither is remembered across restarts.
 - Device Settings: levels, 48 V, instrument options, digital formats and
   clock source.
 - Rename channels by double-clicking the name. Names are saved in

@@ -115,6 +115,13 @@ How ffmixer implements these on the FF800 (all in `mixer-core`):
   unit holds only crosspoints, so after a restart outputs come back as
   stereo pairs (hard-panned where the two sides differ), which sounds
   the same.
+- **Mono button (stereo outputs):** mixes the left and right of what
+  the output receives into one signal and sends it to both sides, each
+  at half level, so a centred signal keeps its level and a hard-panned
+  one drops 6 dB. Opposite-phase content cancels, which is the point of
+  the check. Output phase is applied after the sum. It can't be on while
+  the pair is split (two mono outputs cannot reproduce it), and it is not
+  read back from the unit, so it resets on restart.
 - **Not yet:** Talkback and No Trim (need Control Room and Trim).
 - **Loopback: not possible yet.** FFADO's `RME_FF_OUTPUT_REC_MASK`
   (`0x801c0080`, write-only, one little-endian quadlet per channel) is
