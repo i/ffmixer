@@ -1,0 +1,96 @@
+name: Release
+
+# Push a tag like v0.1.0 to build a Linux x86_64 binary and publish it as
+# a pre-release. The tag must match the version in tauri.conf.json.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('apps/ffmixer/src-tauri/tauri.conf.json'))['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match version $version" >&2
+            exit 1
+          fi
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/ffmixer/package-lock.json
+
+      - name: Test
+        working-directory: apps/ffmixer
+        run: |
+          npm ci
+          npm run build
+          npm run check
+          cd ../..
+          cargo test --workspace
+
+      - name: Build
+        working-directory: apps/ffmixer
+        run: npm run tauri -- build --no-bundle
+
+      - name: Package
+        run: |
+          name="ffmixer-${GITHUB_REF_NAME}-linux-x86_64"
+          mkdir -p "dist/$name/docs"
+          cp target/release/ffmixer LICENSE README.md "dist/$name/"
+          cp docs/setup.md "dist/$name/docs/"
+          tar -C dist -czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+
+      - name: Release notes
+        run: |
+          cat > notes.md <<'EOF'
+          **Pre-release. Use at your own risk.** ffmixer sends commands
+          straight to audio hardware and can change 48 V phantom power,
+          levels and the clock. A mistake or a bug could damage
+          microphones or other equipment, speakers, headphones or your
+          hearing. It has been tested on one Fireface 800 on one Fedora
+          machine and comes without warranty (see LICENSE). Turn monitors
+          and headphones down before going live.
+
+          Needs FFADO 2.4.x (`ffado-dbus-server`), access to `/dev/fw*`
+          and WebKitGTK 4.1. See `docs/setup.md` in the archive. Verify the
+          download with `sha256sum -c`.
+
+          Not affiliated with or endorsed by RME.
+          EOF
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --prerelease \
+            --title "ffmixer $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            ffmixer-*-linux-x86_64.tar.gz \
+            ffmixer-*-linux-x86_64.tar.gz.sha256
