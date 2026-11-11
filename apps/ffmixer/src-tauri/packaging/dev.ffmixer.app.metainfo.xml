@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.ffmixer.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>ffmixer</name>
+  <developer id="dev.ffmixer">
+    <name>ffmixer contributors</name>
+  </developer>
+  <summary>TotalMix FX-style mixer for the RME Fireface 800</summary>
+  <description>
+    <p>
+      A mixer and settings app for RME Fireface interfaces on Linux, inspired by
+      TotalMix FX. It controls the unit through FFADO.
+    </p>
+    <p>
+      Use at your own risk: ffmixer sends commands to real audio hardware, and a
+      mistake or a bug could damage equipment or your hearing. Not affiliated
+      with or endorsed by RME.
+    </p>
+  </description>
+  <launchable type="desktop-id">ffmixer.desktop</launchable>
+  <url type="homepage">https://github.com/i/ffmixer</url>
+  <url type="bugtracker">https://github.com/i/ffmixer/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/i/ffmixer/main/docs/images/ffmixer.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>ffmixer</binary>
+  </provides>
+</component>

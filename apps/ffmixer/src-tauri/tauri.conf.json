@@ -51,7 +51,8 @@
           "ffado-dbus-server"
         ],
         "files": {
-          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules"
+          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules",
+          "/usr/share/metainfo/dev.ffmixer.app.metainfo.xml": "packaging/dev.ffmixer.app.metainfo.xml"
         },
         "postInstallScript": "packaging/postinst.sh"
       },
@@ -64,10 +65,12 @@
           "ffado"
         ],
         "files": {
-          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules"
+          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules",
+          "/usr/share/metainfo/dev.ffmixer.app.metainfo.xml": "packaging/dev.ffmixer.app.metainfo.xml"
         },
         "postInstallScript": "packaging/postinst.sh"
       }
-    }
+    },
+    "homepage": "https://github.com/i/ffmixer"
   }
 }
