@@ -68,10 +68,13 @@
     if (!dragging) {
       if (Math.abs(event.clientY - dragStartY) < DRAG_THRESHOLD) return
       // Start measuring from here so the threshold itself adds no jump.
+      // Read the level before `dragging` flips: `shown` then switches to
+      // `local`, which is stale (null on the first drag).
+      const start = db
       dragging = true
-      local = shown
+      local = start
       dragStartY = event.clientY
-      dragStartPosition = dbToFader(shown)
+      dragStartPosition = dbToFader(start)
       return
     }
     const factor = event.shiftKey ? FINE_FACTOR : 1
