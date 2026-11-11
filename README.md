@@ -73,26 +73,33 @@ What going live can and can't touch:
   fine, double-click or Ctrl+click to centre, Shift/Shift+Ctrl+click
   for hard left/right.
 
-## Requirements
+## Setup
 
-- `ffado-dbus-server` (FFADO 2.4.x), started on demand by D-Bus.
-- Read/write access to `/dev/fw*`: be in the `audio` group, plus a udev
-  rule such as
-  `SUBSYSTEM=="firewire", GROUP="audio", MODE="0660"`.
-- Node.js 22+, `cargo-tauri` 2.x, and WebKitGTK 4.1 development files.
+See **[docs/setup.md](docs/setup.md)** for installation, the FireWire
+permissions, a first-run checklist and troubleshooting. In short:
+
+- A Fireface 800 on FireWire, and FFADO 2.4.x (`ffado-dbus-server`,
+  started on demand by D-Bus). **The mixer and Device Settings need
+  that server; without it the app starts in demo mode.** The meters
+  read the unit directly and do not.
+- Read/write access to `/dev/fw*` (the `audio` group plus a udev rule).
+- Node.js 22+, Rust 1.85+, and WebKitGTK 4.1 development files. The
+  Tauri CLI comes from `npm install`; no `cargo-tauri` needed.
 
 The app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless already set:
 WebKitGTK's DMA-BUF renderer crashed on Wayland here (NVIDIA).
 
-## Run
+## Build and run
 
 ```bash
-cargo test --workspace
-cargo test -p totalnix -- --ignored   # go-live checks against the running server (reads only)
-cargo run -p ffado-probe -- 5    # 5 s of meters; 0 skips them
-
 cd apps/totalnix
 npm install
 npm run check                     # svelte-check + tsc
-cargo tauri dev                   # run the app
+npm run tauri dev                 # run the app
+npm run tauri -- build --no-bundle   # release binary, no installer
+
+cd ../..
+cargo test --workspace
+cargo test -p totalnix -- --ignored   # go-live checks against the running server (reads only)
+cargo run -p ffado-probe -- 5     # 5 s of meters; 0 skips them
 ```
