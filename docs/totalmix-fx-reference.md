@@ -285,6 +285,18 @@ vs `INPUT_OPT0_A1`) when Speaker Emulation changes. A level jump was
 observed on a Fireface 800 after toggling it, cause not yet measured, so
 every instrument option change asks for confirmation.
 
+**Speaker Emulation can not be switched on.** With it on, FFADO sets
+`0x400` in the second configuration quadlet and leaves out `0x800`.
+snd-firewire-ctl-services uses `0x800` as input 1's front-jack select, has
+no `0x400` for input 1, and puts the Speaker Emulation switch on `0x4` of
+the first quadlet (which FFADO treats as an LED bit). On a Fireface 800
+the input 1 meter went to full scale with nothing plugged in and the
+gain pot down, and it stayed loud (feedback with direct monitoring) until
+it was switched off. Cause: probably FFADO deselecting the front jack, not
+yet proven. The button is disabled, the backend refuses the write, and
+switching it off stays allowed. Re-enabling it needs the right bits
+verified, for example by writing them directly with the speakers off.
+
 What FFADO does, which shapes the code:
 
 - **Every setter rewrites the unit's whole configuration** (three

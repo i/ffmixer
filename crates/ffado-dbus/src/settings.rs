@@ -400,6 +400,15 @@ pub struct ControlWrite {
     pub value: i32,
 }
 
+/// Why Speaker Emulation cannot be switched on from here.
+///
+/// FFADO sets `0x400` instead of the front-jack bit `0x800` when it is on.
+/// snd-firewire-ctl-services knows no `0x400` for input 1 and uses `0x800`
+/// for the front jack. On a Fireface 800 the input 1 meter went to full
+/// scale with nothing connected after switching it on, so the control is
+/// blocked until the right bits are known. Switching it off stays allowed.
+pub const SPEAKER_EMULATION_BLOCKED: &str = "Speaker Emulation is disabled: with FFADO it made input 1 go to full scale on a Fireface 800 with nothing connected, and FFADO's register bits for it disagree with snd-firewire-ctl-services.";
+
 /// Why a change needs the user's confirmation first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Risk {
@@ -449,6 +458,9 @@ impl Setting {
             return Err(Error::Rejected(
                 "the limiter can only be switched with input 1 on the front jack".to_owned(),
             ));
+        }
+        if matches!(self, Setting::SpeakerEmulation { on: true }) {
+            return Err(Error::Rejected(SPEAKER_EMULATION_BLOCKED.to_owned()));
         }
         Ok(())
     }
@@ -892,6 +904,12 @@ mod tests {
         assert_eq!(
             risk(Setting::SpeakerEmulation { on: true }),
             Some(Risk::InputPath)
+        );
+        // Switching it on is refused outright (see SPEAKER_EMULATION_BLOCKED).
+        assert!(
+            Setting::SpeakerEmulation { on: true }
+                .validate(&current)
+                .is_err()
         );
         let mut emulating = current;
         emulating.instrument.speaker_emulation = true;
