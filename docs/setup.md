@@ -83,7 +83,18 @@ may be louder than you expect.
 
 ## 5. Get the app
 
-**Download a release.** Each release has a tarball and a `.sha256` file
+**Install a package (64-bit only).** Each release has a `.deb` and an
+`.rpm`. They install `/usr/bin/ffmixer`, an app menu entry and the icon,
+and pull in WebKitGTK 4.1 and GTK 3. FFADO is only recommended, so
+install it yourself if your package manager skips it. The package
+checksums are in `ffmixer-*-installers.sha256`.
+
+```bash
+sudo apt install ./ffmixer_*_amd64.deb        # Debian, Ubuntu
+sudo dnf install ./ffmixer-*.x86_64.rpm       # Fedora
+```
+
+**Download a tarball.** Each release has a tarball and a `.sha256` file
 for 64-bit systems (`x86_64`) and for 32-bit x86 (`i686`). The 32-bit
 build has not been run on real hardware. Use the one that matches your
 system (`uname -m` prints `x86_64` or `i686`):
@@ -107,9 +118,12 @@ cd ffmixer/apps/ffmixer
 npm install
 npm run tauri dev                      # development, hot reload
 npm run tauri -- build --no-bundle     # release binary, no installer
+npm run tauri -- build --bundles deb,rpm   # .deb and .rpm installers
 ```
 
 The binary is `target/release/ffmixer` (or under `$CARGO_TARGET_DIR`).
+The installers are in `target/release/bundle/`. The icon source is
+`apps/ffmixer/src-tauri/icons/icon.svg`.
 
 To run the checks:
 

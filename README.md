@@ -95,6 +95,7 @@ cd apps/ffmixer
 npm install
 npm run tauri dev                     # run the app
 npm run tauri -- build --no-bundle    # release binary
+npm run tauri -- build --bundles deb,rpm   # installers with icon
 ```
 
 ## Project layout

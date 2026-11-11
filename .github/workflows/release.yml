@@ -1,7 +1,8 @@
 name: Release
 
 # Push a tag like v0.1.0 to build Linux binaries (64-bit and 32-bit x86)
-# and publish them as a pre-release. The tag must match the version in
+# and publish them as a pre-release. The 64-bit build also gets .deb and
+# .rpm installers. The tag must match the version in
 # tauri.conf.json.
 on:
   push:
@@ -20,6 +21,7 @@ jobs:
         include:
           - arch: x86_64
             target: x86_64-unknown-linux-gnu
+            bundle: --bundles deb,rpm
             packages: >-
               libwebkit2gtk-4.1-dev
               libxdo-dev
@@ -28,6 +30,7 @@ jobs:
               librsvg2-dev
           - arch: i686
             target: i686-unknown-linux-gnu
+            bundle: --no-bundle
             packages: >-
               gcc-multilib
               libwebkit2gtk-4.1-dev:i386
@@ -79,7 +82,7 @@ jobs:
 
       - name: Build
         working-directory: apps/ffmixer
-        run: npm run tauri -- build --no-bundle --target ${{ matrix.target }}
+        run: npm run tauri -- build ${{ matrix.bundle }} --target ${{ matrix.target }}
 
       - name: Package
         run: |
@@ -89,6 +92,11 @@ jobs:
           cp docs/setup.md "dist/$name/docs/"
           tar -C dist -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          if [ "${{ matrix.arch }}" = x86_64 ]; then
+            cp target/${{ matrix.target }}/release/bundle/deb/*.deb \
+               target/${{ matrix.target }}/release/bundle/rpm/*.rpm .
+            sha256sum ffmixer*.deb ffmixer*.rpm > "ffmixer-${GITHUB_REF_NAME}-installers.sha256"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -96,6 +104,9 @@ jobs:
           path: |
             ffmixer-*.tar.gz
             ffmixer-*.tar.gz.sha256
+            ffmixer*.deb
+            ffmixer*.rpm
+            ffmixer-*-installers.sha256
           if-no-files-found: error
 
   publish:
@@ -121,6 +132,8 @@ jobs:
           and headphones down before starting it.
 
           Downloads: `x86_64` for 64-bit systems, `i686` for 32-bit x86.
+          The 64-bit build also comes as a `.deb` and an `.rpm`
+          installer, which add ffmixer and its icon to the app menu.
           The 32-bit build compiles and passes the tests, but has not
           been run on real hardware.
 
@@ -141,4 +154,7 @@ jobs:
             --title "ffmixer $GITHUB_REF_NAME" \
             --notes-file notes.md \
             ffmixer-*.tar.gz \
-            ffmixer-*.tar.gz.sha256
+            ffmixer-*.tar.gz.sha256 \
+            ffmixer*.deb \
+            ffmixer*.rpm \
+            ffmixer-*-installers.sha256
