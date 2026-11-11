@@ -19,12 +19,19 @@
   /** Phones (PH 9/10) then Main (AN 1/2) sit at the right end, as in TotalMix. */
   const MONITOR_PAIRS = [4, 0]
   const monitorOutputs = $derived(
-    view ? MONITOR_PAIRS.map((pair) => view.outputs[pair]) : [],
+    view
+      ? MONITOR_PAIRS.flatMap((pair) => view.outputs.filter((output) => output.pair === pair))
+      : [],
   )
   const otherOutputs = $derived(
     view ? view.outputs.filter((output) => !MONITOR_PAIRS.includes(output.pair)) : [],
   )
-  const target = $derived(view ? view.outputs[view.selectedOutput].name : '')
+  const selectedOutput = $derived(
+    view?.outputs.find((output) => output.channel === view.selectedOutput),
+  )
+  const target = $derived(selectedOutput?.name ?? '')
+  /** A send into a mono output has no pan. */
+  const outputStereo = $derived(selectedOutput?.stereo ?? true)
 </script>
 
 {#if view}
@@ -32,12 +39,12 @@
     <div class="rows">
       {#snippet inputs()}
         {#each view.inputs as strip (`${strip.channel}-${strip.stereo}`)}
-          <Strip {strip} row="inputs" {target} soloActive={view.anySoloed} />
+          <Strip {strip} row="inputs" {target} {outputStereo} soloActive={view.anySoloed} />
         {/each}
       {/snippet}
       {#snippet playbacks()}
         {#each view.playbacks as strip (`${strip.channel}-${strip.stereo}`)}
-          <Strip {strip} row="playbacks" {target} soloActive={view.anySoloed} />
+          <Strip {strip} row="playbacks" {target} {outputStereo} soloActive={view.anySoloed} />
         {/each}
       {/snippet}
 
@@ -52,12 +59,12 @@
         <Row title="Software Playback">{@render playbacks()}</Row>
       {/if}
       <Row title="Hardware Outputs">
-        {#each otherOutputs as output (output.pair)}
-          <OutputStrip {output} selected={output.pair === view.selectedOutput} />
+        {#each otherOutputs as output (`${output.channel}-${output.stereo}`)}
+          <OutputStrip {output} selected={output.channel === view.selectedOutput} />
         {/each}
         <div class="spacer"></div>
-        {#each monitorOutputs as output (output.pair)}
-          <OutputStrip {output} selected={output.pair === view.selectedOutput} />
+        {#each monitorOutputs as output (`${output.channel}-${output.stereo}`)}
+          <OutputStrip {output} selected={output.channel === view.selectedOutput} />
         {/each}
       </Row>
     </div>

@@ -2,15 +2,16 @@
 //!
 //! There is no channel fader. Every source strip (hardware input or
 //! software playback, mono or stereo) has one send — gain plus pan — to
-//! each of the 14 stereo hardware outputs. Mute, solo, pan, stereo
-//! linking, width, M/S processing and phase exist only here;
-//! [`Mixer::render`] turns them into the plain per-crosspoint gains the
-//! hardware stores.
+//! each hardware output strip. Outputs work like source rows: a pair is
+//! one stereo strip or two mono strips, and a stereo strip is led by its
+//! left channel. Mute, solo, pan, stereo linking, width, M/S processing
+//! and phase exist only here; [`Mixer::render`] turns them into the
+//! plain per-crosspoint gains the hardware stores.
 
 use serde::{Deserialize, Serialize};
 
 use crate::law::{self, GAIN_MAX};
-use crate::{CHANNELS, OUTPUT_PAIRS, PAIRS};
+use crate::{CHANNELS, PAIRS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -30,13 +31,15 @@ pub struct Send {
 
 /// State of one source channel. For a stereo pair the left (even)
 /// channel holds mute, solo and sends for the whole strip; each side
-/// keeps its own phase flag.
+/// keeps its own phase flag. `sends` is indexed by output channel: a
+/// stereo output strip uses the entry of its left channel, a mono one
+/// the entry of its own channel. A send to a mono output has no pan.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Source {
     pub muted: bool,
     pub soloed: bool,
     pub phase_inverted: bool,
-    pub sends: [Send; OUTPUT_PAIRS],
+    pub sends: [Send; CHANNELS],
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -62,17 +65,20 @@ impl Default for SourceBank {
     }
 }
 
-/// A hardware output pair (outputs are always stereo).
+/// State of one hardware output channel. For a stereo pair the left
+/// (even) channel holds volume, balance and mute for the whole strip;
+/// each side keeps its own phase flag.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Output {
     /// Linear gain, 0.0 to [`GAIN_MAX`].
     pub volume: f64,
+    /// Only used by a stereo strip.
     pub balance: f64,
     pub muted: bool,
-    /// Phase L / Phase R. The FF800 drivers expose no output inverters,
-    /// so this inverts every crosspoint feeding that output channel,
-    /// which sounds identical.
-    pub phase_inverted: [bool; 2],
+    /// The FF800 drivers expose no output inverters, so this inverts
+    /// every crosspoint feeding that output channel, which sounds
+    /// identical.
+    pub phase_inverted: bool,
 }
 
 impl Default for Output {
@@ -81,7 +87,7 @@ impl Default for Output {
             volume: 1.0,
             balance: 0.0,
             muted: false,
-            phase_inverted: [false; 2],
+            phase_inverted: false,
         }
     }
 }
@@ -151,7 +157,7 @@ impl std::fmt::Display for MixerError {
     ) -> std::fmt::Result {
         match self {
             MixerError::ChannelOutOfRange(c) => write!(f, "channel {c} out of range"),
-            MixerError::OutputOutOfRange(o) => write!(f, "output pair {o} out of range"),
+            MixerError::OutputOutOfRange(o) => write!(f, "output {o} out of range"),
             MixerError::NotAStripLeader(c) => {
                 write!(f, "channel {c} is the right side of a stereo strip")
             }
@@ -167,8 +173,11 @@ pub type Result<T, E = MixerError> = std::result::Result<T, E>;
 pub struct Mixer {
     pub inputs: SourceBank,
     pub playbacks: SourceBank,
-    pub outputs: [Output; OUTPUT_PAIRS],
-    /// The submix being edited (Submix view). Solo applies only here.
+    /// Whether output pair `p` (channels `2p`, `2p+1`) is one stereo strip.
+    pub output_stereo: [bool; PAIRS],
+    pub outputs: [Output; CHANNELS],
+    /// The output strip whose submix is being edited (Submix view), as
+    /// its first channel. Solo applies only here.
     pub selected_output: usize,
 }
 
@@ -179,11 +188,12 @@ impl Default for Mixer {
         let mut mixer = Self {
             inputs: SourceBank::default(),
             playbacks: SourceBank::default(),
-            outputs: [Output::default(); OUTPUT_PAIRS],
+            output_stereo: [true; PAIRS],
+            outputs: [Output::default(); CHANNELS],
             selected_output: 0,
         };
         for pair in 0..PAIRS {
-            mixer.playbacks.channels[2 * pair].sends[pair].gain = 1.0;
+            mixer.playbacks.channels[2 * pair].sends[2 * pair].gain = 1.0;
         }
         mixer
     }
@@ -235,6 +245,27 @@ impl Mixer {
         strips
     }
 
+    /// Output strips in display order.
+    pub fn output_strips(&self) -> Vec<StripRef> {
+        let mut strips = Vec::with_capacity(CHANNELS);
+        for pair in 0..PAIRS {
+            if self.output_stereo[pair] {
+                strips.push(StripRef {
+                    channel: 2 * pair,
+                    stereo: true,
+                });
+            } else {
+                for channel in [2 * pair, 2 * pair + 1] {
+                    strips.push(StripRef {
+                        channel,
+                        stereo: false,
+                    });
+                }
+            }
+        }
+        strips
+    }
+
     pub fn source(
         &self,
         kind: SourceKind,
@@ -256,7 +287,7 @@ impl Mixer {
         &mut self,
         output: usize,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.selected_output = output;
         Ok(())
     }
@@ -268,7 +299,7 @@ impl Mixer {
         output: usize,
         gain: f64,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.source_mut(kind, channel)?.sends[output].gain = clamp_gain(gain);
         Ok(())
     }
@@ -280,7 +311,7 @@ impl Mixer {
         output: usize,
         pan: f64,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.source_mut(kind, channel)?.sends[output].pan = clamp_pan(pan);
         Ok(())
     }
@@ -389,6 +420,82 @@ impl Mixer {
         Ok(())
     }
 
+    /// Switches an output pair between one stereo strip and two mono
+    /// strips, keeping the sound the same. Splitting moves the balance
+    /// and each send's pan into the level of the left and right output;
+    /// joining keeps the louder level and centres the balance and pans
+    /// (each side's own mix is lost).
+    pub fn set_output_stereo(
+        &mut self,
+        pair: usize,
+        stereo: bool,
+    ) -> Result<()> {
+        check_pair(pair)?;
+        if self.output_stereo[pair] == stereo {
+            return Ok(());
+        }
+        let (left_index, right_index) = (2 * pair, 2 * pair + 1);
+        let strips = [
+            (SourceKind::Input, self.strips(SourceKind::Input)),
+            (SourceKind::Playback, self.strips(SourceKind::Playback)),
+        ];
+        let left = self.outputs[left_index];
+        let right_phase = self.outputs[right_index].phase_inverted;
+        if stereo {
+            self.outputs[left_index].volume = left.volume.max(self.outputs[right_index].volume);
+            self.outputs[left_index].muted = left.muted && self.outputs[right_index].muted;
+            self.outputs[left_index].balance = 0.0;
+            self.outputs[right_index] = Output {
+                phase_inverted: right_phase,
+                ..Output::default()
+            };
+            for (kind, strips) in &strips {
+                for strip in strips {
+                    let channels = &mut self.bank_mut(*kind).channels;
+                    let sends = &mut channels[strip.channel].sends;
+                    sends[left_index].gain = sends[left_index].gain.max(sends[right_index].gain);
+                    sends[left_index].pan = 0.0;
+                    sends[right_index] = Send::default();
+                }
+            }
+            if self.selected_output == right_index {
+                self.selected_output = left_index;
+            }
+        } else {
+            let (side_left, side_right) = law::balance(left.balance);
+            self.outputs[left_index].volume = clamp_gain(left.volume * side_left);
+            self.outputs[left_index].balance = 0.0;
+            self.outputs[right_index] = Output {
+                volume: clamp_gain(left.volume * side_right),
+                balance: 0.0,
+                muted: left.muted,
+                phase_inverted: right_phase,
+            };
+            for (kind, strips) in &strips {
+                for strip in strips {
+                    let channels = &mut self.bank_mut(*kind).channels;
+                    let sends = &mut channels[strip.channel].sends;
+                    let send = sends[left_index];
+                    let (to_left, to_right) = if strip.stereo {
+                        law::balance(send.pan)
+                    } else {
+                        law::mono_pan(send.pan)
+                    };
+                    sends[left_index] = Send {
+                        gain: clamp_gain(send.gain * to_left),
+                        pan: 0.0,
+                    };
+                    sends[right_index] = Send {
+                        gain: clamp_gain(send.gain * to_right),
+                        pan: 0.0,
+                    };
+                }
+            }
+        }
+        self.output_stereo[pair] = stereo;
+        Ok(())
+    }
+
     /// Phase of one output channel (0–27).
     pub fn set_output_phase(
         &mut self,
@@ -398,7 +505,7 @@ impl Mixer {
         if channel >= CHANNELS {
             return Err(MixerError::ChannelOutOfRange(channel));
         }
-        self.outputs[channel / 2].phase_inverted[channel % 2] = inverted;
+        self.outputs[channel].phase_inverted = inverted;
         Ok(())
     }
 
@@ -407,7 +514,7 @@ impl Mixer {
         output: usize,
         volume: f64,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.outputs[output].volume = clamp_gain(volume);
         Ok(())
     }
@@ -417,7 +524,7 @@ impl Mixer {
         output: usize,
         balance: f64,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.outputs[output].balance = clamp_pan(balance);
         Ok(())
     }
@@ -427,7 +534,7 @@ impl Mixer {
         output: usize,
         muted: bool,
     ) -> Result<()> {
-        check_output(output)?;
+        self.check_output(output)?;
         self.outputs[output].muted = muted;
         Ok(())
     }
@@ -471,6 +578,7 @@ impl Mixer {
     /// Turns the model into hardware crosspoint gains.
     pub fn render(&self) -> Crosspoints {
         let any_solo = self.any_soloed();
+        let output_strips = self.output_strips();
         let mut crosspoints = Crosspoints::silent();
         for (kind, matrix) in [
             (SourceKind::Input, &mut crosspoints.inputs),
@@ -482,20 +590,29 @@ impl Mixer {
                 if source.muted {
                     continue;
                 }
-                for (output, send) in source.sends.iter().enumerate() {
+                for output in &output_strips {
+                    let send = source.sends[output.channel];
                     let solo_silenced =
-                        any_solo && output == self.selected_output && !source.soloed;
+                        any_solo && output.channel == self.selected_output && !source.soloed;
                     if send.gain == 0.0 || solo_silenced {
                         continue;
                     }
-                    let out_channels = [2 * output, 2 * output + 1];
+                    // A mono output takes one side of what the stereo
+                    // output would get, at full level: no pan or balance.
+                    let out_channels =
+                        output.channel..output.channel + if output.stereo { 2 } else { 1 };
                     if strip.stereo {
                         let pair = strip.channel / 2;
                         let mix = stereo_mix(bank.width[pair], bank.ms_proc[pair]);
-                        let sides = law::balance(send.pan);
+                        let sides = if output.stereo {
+                            law::balance(send.pan)
+                        } else {
+                            (1.0, 1.0)
+                        };
                         let side_gains = [sides.0, sides.1];
                         let source_channels = [strip.channel, strip.channel + 1];
-                        for (row, out_channel) in out_channels.into_iter().enumerate() {
+                        for out_channel in out_channels {
+                            let row = out_channel % 2;
                             for (col, source_channel) in source_channels.into_iter().enumerate() {
                                 let phase =
                                     phase_sign(bank.channels[source_channel].phase_inverted);
@@ -505,18 +622,23 @@ impl Mixer {
                             }
                         }
                     } else {
-                        let (left, right) = law::mono_pan(send.pan);
+                        let sides = if output.stereo {
+                            law::mono_pan(send.pan)
+                        } else {
+                            (1.0, 1.0)
+                        };
+                        let side_gains = [sides.0, sides.1];
                         let phase = phase_sign(source.phase_inverted);
-                        matrix[out_channels[0]][strip.channel] =
-                            to_crosspoint(send.gain * left * phase);
-                        matrix[out_channels[1]][strip.channel] =
-                            to_crosspoint(send.gain * right * phase);
+                        for out_channel in out_channels {
+                            matrix[out_channel][strip.channel] =
+                                to_crosspoint(send.gain * side_gains[out_channel % 2] * phase);
+                        }
                     }
                 }
             }
         }
         for channel in 0..CHANNELS {
-            if self.outputs[channel / 2].phase_inverted[channel % 2] {
+            if self.outputs[channel].phase_inverted {
                 for matrix in [&mut crosspoints.inputs, &mut crosspoints.playbacks] {
                     for value in matrix[channel].iter_mut().filter(|value| **value != 0.0) {
                         *value = -*value;
@@ -524,13 +646,18 @@ impl Mixer {
                 }
             }
         }
-        for (pair, output) in self.outputs.iter().enumerate() {
-            if output.muted {
+        for output in &output_strips {
+            let state = &self.outputs[output.channel];
+            if state.muted {
                 continue;
             }
-            let (left, right) = law::balance(output.balance);
-            crosspoints.outputs[2 * pair] = law::to_dbus(output.volume * left);
-            crosspoints.outputs[2 * pair + 1] = law::to_dbus(output.volume * right);
+            if output.stereo {
+                let (left, right) = law::balance(state.balance);
+                crosspoints.outputs[output.channel] = law::to_dbus(state.volume * left);
+                crosspoints.outputs[output.channel + 1] = law::to_dbus(state.volume * right);
+            } else {
+                crosspoints.outputs[output.channel] = law::to_dbus(state.volume);
+            }
         }
         crosspoints
     }
@@ -543,6 +670,20 @@ impl Mixer {
                     .into_iter()
                     .map(move |strip| (kind, &self.bank(kind).channels[strip.channel]))
             })
+    }
+
+    /// An output strip is addressed by its first channel.
+    fn check_output(
+        &self,
+        output: usize,
+    ) -> Result<()> {
+        if output >= CHANNELS {
+            return Err(MixerError::OutputOutOfRange(output));
+        }
+        if output % 2 == 1 && self.output_stereo[output / 2] {
+            return Err(MixerError::NotAStripLeader(output));
+        }
+        Ok(())
     }
 
     fn check_leader(
@@ -566,14 +707,6 @@ impl Mixer {
     ) -> Result<&mut Source> {
         self.check_leader(kind, channel)?;
         Ok(&mut self.bank_mut(kind).channels[channel])
-    }
-}
-
-fn check_output(output: usize) -> Result<()> {
-    if output >= OUTPUT_PAIRS {
-        Err(MixerError::OutputOutOfRange(output))
-    } else {
-        Ok(())
     }
 }
 
@@ -658,8 +791,8 @@ mod tests {
     fn mono_send_centre_is_minus_three_db_each_side() {
         let mut mixer = Mixer::default();
         mixer.set_stereo(SourceKind::Input, 3, false).unwrap();
-        mixer.set_send_gain(SourceKind::Input, 6, 4, 1.0).unwrap();
-        mixer.set_send_pan(SourceKind::Input, 6, 4, 0.0).unwrap();
+        mixer.set_send_gain(SourceKind::Input, 6, 8, 1.0).unwrap();
+        mixer.set_send_pan(SourceKind::Input, 6, 8, 0.0).unwrap();
         let crosspoints = mixer.render();
         assert_eq!(crosspoints.inputs[8][6], 11585.0);
         assert_eq!(crosspoints.inputs[9][6], 11585.0);
@@ -668,7 +801,7 @@ mod tests {
     #[test]
     fn stereo_send_is_left_to_left_right_to_right() {
         let mut mixer = Mixer::default();
-        mixer.set_send_gain(SourceKind::Input, 0, 6, 1.0).unwrap();
+        mixer.set_send_gain(SourceKind::Input, 0, 12, 1.0).unwrap();
         let crosspoints = mixer.render();
         assert_eq!(crosspoints.inputs[12][0], 16384.0);
         assert_eq!(crosspoints.inputs[13][1], 16384.0);
@@ -680,7 +813,7 @@ mod tests {
     fn mute_silences_every_routing() {
         let mut mixer = Mixer::default();
         mixer
-            .set_send_gain(SourceKind::Playback, 0, 3, 1.0)
+            .set_send_gain(SourceKind::Playback, 0, 6, 1.0)
             .unwrap();
         mixer.set_muted(SourceKind::Playback, 0, true).unwrap();
         let crosspoints = mixer.render();
@@ -823,5 +956,99 @@ mod tests {
         mixer.set_stereo(SourceKind::Input, 2, false).unwrap();
         assert_eq!(mixer.inputs.width[2], 1.0);
         assert!(!mixer.inputs.ms_proc[2]);
+    }
+
+    /// A mix with balance, pans and a mix of mono and stereo sources.
+    fn busy_mixer() -> Mixer {
+        let mut mixer = Mixer::default();
+        mixer.set_stereo(SourceKind::Input, 1, false).unwrap();
+        mixer.set_output_volume(2, 0.5).unwrap();
+        mixer.set_output_balance(2, -0.4).unwrap();
+        // Stereo playback pair 1 and mono input 2, both into output pair 1.
+        mixer
+            .set_send_gain(SourceKind::Playback, 2, 2, 0.8)
+            .unwrap();
+        mixer.set_send_pan(SourceKind::Playback, 2, 2, 0.3).unwrap();
+        mixer.set_send_gain(SourceKind::Input, 2, 2, 0.6).unwrap();
+        mixer.set_send_pan(SourceKind::Input, 2, 2, -0.7).unwrap();
+        mixer.set_phase(SourceKind::Input, 3, true).unwrap();
+        mixer.set_send_gain(SourceKind::Input, 3, 2, 0.9).unwrap();
+        mixer.set_send_pan(SourceKind::Input, 3, 2, 1.0).unwrap();
+        mixer
+    }
+
+    #[test]
+    fn splitting_an_output_keeps_the_sound() {
+        let mut mixer = busy_mixer();
+        let before = mixer.render();
+        mixer.set_output_stereo(1, false).unwrap();
+        assert_eq!(mixer.render().differences(&before), 0);
+        assert_eq!(
+            mixer.output_strips().len(),
+            PAIRS + 1,
+            "one pair became two strips"
+        );
+    }
+
+    #[test]
+    fn joining_an_output_with_equal_sides_keeps_the_sound() {
+        let mut mixer = Mixer::default();
+        mixer
+            .set_send_gain(SourceKind::Playback, 2, 2, 0.8)
+            .unwrap();
+        let before = mixer.render();
+        mixer.set_output_stereo(1, false).unwrap();
+        mixer.set_output_stereo(1, true).unwrap();
+        assert_eq!(mixer.render().differences(&before), 0);
+        assert!(mixer.output_stereo[1]);
+    }
+
+    #[test]
+    fn mono_outputs_have_their_own_level_and_submix() {
+        let mut mixer = Mixer::default();
+        mixer.set_output_stereo(0, false).unwrap();
+        mixer.set_output_volume(1, 0.5).unwrap();
+        mixer.set_output_muted(0, true).unwrap();
+        mixer.set_send_gain(SourceKind::Input, 0, 1, 1.0).unwrap();
+        let crosspoints = mixer.render();
+        assert_eq!(crosspoints.outputs[0], 0.0, "left muted on its own");
+        assert_eq!(crosspoints.outputs[1], 8192.0, "right keeps its level");
+        assert_eq!(crosspoints.inputs[0][0], 0.0, "left submix untouched");
+        assert_eq!(
+            crosspoints.inputs[1][1], 16384.0,
+            "stereo source's right side"
+        );
+        assert_eq!(crosspoints.inputs[1][0], 0.0);
+    }
+
+    #[test]
+    fn right_channel_of_a_stereo_output_is_rejected() {
+        let mut mixer = Mixer::default();
+        assert_eq!(
+            mixer.set_output_volume(1, 1.0),
+            Err(MixerError::NotAStripLeader(1))
+        );
+        assert_eq!(mixer.select_output(1), Err(MixerError::NotAStripLeader(1)));
+        mixer.set_output_stereo(0, false).unwrap();
+        assert!(mixer.select_output(1).is_ok());
+    }
+
+    #[test]
+    fn joining_an_output_moves_the_selection_to_its_left_channel() {
+        let mut mixer = Mixer::default();
+        mixer.set_output_stereo(2, false).unwrap();
+        mixer.select_output(5).unwrap();
+        mixer.set_output_stereo(2, true).unwrap();
+        assert_eq!(mixer.selected_output, 4);
+    }
+
+    #[test]
+    fn mono_output_phase_inverts_only_its_own_channel() {
+        let mut mixer = Mixer::default();
+        mixer.set_output_stereo(0, false).unwrap();
+        mixer.set_output_phase(1, true).unwrap();
+        let crosspoints = mixer.render();
+        assert_eq!(crosspoints.playbacks[0][0], 16384.0);
+        assert_eq!(crosspoints.playbacks[1][1], -16384.0);
     }
 }

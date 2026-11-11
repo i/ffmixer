@@ -29,15 +29,19 @@ export interface StripView {
 }
 
 export interface OutputView {
+  /** The strip's first channel; selects its submix. */
+  channel: number
+  /** Stereo pair the strip belongs to. */
   pair: number
+  stereo: boolean
   name: string
   defaultName: string
   volumeDb: number | null
   balance: number
   muted: boolean
-  /** Phase L / Phase R. */
-  phase: [boolean, boolean]
-  meters: [number, number]
+  /** Phase of each channel of the strip (one entry if mono). */
+  phase: boolean[]
+  meters: number[]
 }
 
 export interface ViewState {
@@ -46,6 +50,7 @@ export interface ViewState {
   mode: Mode
   device: string
   status: string
+  /** First channel of the output strip whose submix is shown. */
   selectedOutput: number
   inputs: StripView[]
   playbacks: StripView[]
@@ -128,6 +133,7 @@ export type Action =
   | { type: 'setPhase'; kind: SourceKind; channel: number; value: boolean }
   | { type: 'setWidth'; kind: SourceKind; pair: number; width: number }
   | { type: 'setMsProc'; kind: SourceKind; pair: number; value: boolean }
+  | { type: 'setOutputStereo'; pair: number; value: boolean }
   | { type: 'setOutputPhase'; channel: number; value: boolean }
   | { type: 'setOutputVolume'; output: number; db: number | null }
   | { type: 'setOutputBalance'; output: number; pan: number }

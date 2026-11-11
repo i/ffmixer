@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ffado_dbus::settings::DeviceSettings;
-use mixer_core::{OUTPUT_PAIRS, SourceKind, law, names};
+use mixer_core::{SourceKind, law, names};
 use serde::Serialize;
 
 use crate::channel_names::NameRow;
@@ -84,15 +84,20 @@ pub struct StripView {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputView {
+    /// The strip's first channel; also what selects its submix.
+    pub channel: usize,
+    /// Stereo pair the strip belongs to (`channel / 2`).
     pub pair: usize,
+    pub stereo: bool,
     pub name: String,
     pub default_name: String,
     pub volume_db: Option<f64>,
     pub balance: f64,
     pub muted: bool,
-    /// Phase L / Phase R.
-    pub phase: [bool; 2],
-    pub meters: [usize; 2],
+    /// Phase of each channel of the strip (one entry if mono).
+    pub phase: Vec<bool>,
+    /// Meter indices into the outputs meter array.
+    pub meters: Vec<usize>,
 }
 
 impl ViewState {
@@ -149,26 +154,40 @@ impl ViewState {
                 })
                 .collect()
         };
-        let outputs = (0..OUTPUT_PAIRS)
-            .map(|pair| {
-                let output = mixer.outputs[pair];
-                let default_name = match pair {
-                    MAIN_PAIR => "Main".to_owned(),
-                    PHONES_PAIR => "Phones".to_owned(),
-                    _ => names::pair_name(2 * pair, names::output_name),
+        let outputs = mixer
+            .output_strips()
+            .into_iter()
+            .map(|strip| {
+                let output = mixer.outputs[strip.channel];
+                let pair = strip.channel / 2;
+                let channels = if strip.stereo {
+                    vec![strip.channel, strip.channel + 1]
+                } else {
+                    vec![strip.channel]
+                };
+                let default_name = match (strip.stereo, pair) {
+                    (true, MAIN_PAIR) => "Main".to_owned(),
+                    (true, PHONES_PAIR) => "Phones".to_owned(),
+                    (true, _) => names::pair_name(strip.channel, names::output_name),
+                    (false, _) => names::output_name(strip.channel),
                 };
                 OutputView {
+                    channel: strip.channel,
                     pair,
+                    stereo: strip.stereo,
                     name: session
                         .names
-                        .get(NameRow::Output, pair)
+                        .get(NameRow::Output, strip.channel)
                         .map_or_else(|| default_name.clone(), str::to_owned),
                     default_name,
                     volume_db: law::gain_to_db(output.volume),
                     balance: output.balance,
                     muted: output.muted,
-                    phase: output.phase_inverted,
-                    meters: [2 * pair, 2 * pair + 1],
+                    phase: channels
+                        .iter()
+                        .map(|&channel| mixer.outputs[channel].phase_inverted)
+                        .collect(),
+                    meters: channels,
                 }
             })
             .collect();

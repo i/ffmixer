@@ -22,7 +22,8 @@ The idea everything else rests on (manual §25.3):
 
 - **There is no channel fader.** Every source (hardware input or software
   playback) has one send to *each* hardware output pair. On the FF800
-  that is 14 stereo submixes, the equivalent of 28 aux sends.
+  that is 14 stereo submixes (up to 28 mono ones when output pairs are
+  split), the equivalent of 28 aux sends.
 - **Submix view (default):** clicking an output in row 3 selects it. Every
   fader in rows 1–2 then shows and edits that source's send *to the
   selected output*.
@@ -39,7 +40,7 @@ That logic lives in our `mixer-core`.
 | Concept | Rule (from the manual) |
 |---|---|
 | Pan | Stereo sources only; −3 dB at centre |
-| Stereo/mono | Per input/playback channel; hardware outputs are always stereo |
+| Stereo/mono | Per input, playback and hardware output pair (the Stereo button in the strip's settings) |
 | Width | 1.00 = stereo, 0.00 = mono, −1.00 = swapped; affects all routings of the channel |
 | MS Proc | Encodes or decodes M/S; affects all routings |
 | Phase L/R | Per side; affects all routings |
@@ -107,8 +108,14 @@ How ffmixer implements these on the FF800 (all in `mixer-core`):
   output volume register accepts negative values is untested. ffmixer
   inverts every crosspoint feeding that output channel instead, which
   sounds identical.
-- **Not yet:** mono outputs, Talkback and No Trim (need Control Room and
-  Trim).
+- **Mono outputs:** a hardware output pair can be split into two mono
+  strips, like the input and playback rows. Each has its own level,
+  mute, phase and submix. A send into a mono output has a level only,
+  with no pan, and a stereo source reaches it through its own side. The
+  unit holds only crosspoints, so after a restart outputs come back as
+  stereo pairs (hard-panned where the two sides differ), which sounds
+  the same.
+- **Not yet:** Talkback and No Trim (need Control Room and Trim).
 - **Loopback: not possible yet.** FFADO's `RME_FF_OUTPUT_REC_MASK`
   (`0x801c0080`, write-only, one little-endian quadlet per channel) is
   a *record mute*, not loopback. Measured on this FF800 with a tone

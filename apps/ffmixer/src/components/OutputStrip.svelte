@@ -5,8 +5,11 @@
   select, and double-click renames. Selecting only changes what the UI
   edits, never the sound.
 
-  AN 1/2 (pair 0) feeds the main monitors, so its fader has no
-  double-click / Home jump to 0 dB.
+  A pair is one stereo strip or two mono strips, like the source rows. A
+  mono output has no balance, and a send into it has no pan.
+
+  AN 1/2 (channels 0 and 1) feed the main monitors, so their faders have
+  no double-click / Home jump to 0 dB.
 -->
 <script lang="ts">
   import { rename, send } from '../lib/backend.svelte'
@@ -28,11 +31,11 @@
   let settingsOpen = $state(false)
 
   function select(): void {
-    if (!selected) send({ type: 'selectOutput', output: output.pair })
+    if (!selected) send({ type: 'selectOutput', output: output.channel })
   }
 
   function setPhase(side: number): void {
-    send({ type: 'setOutputPhase', channel: 2 * output.pair + side, value: !output.phase[side] })
+    send({ type: 'setOutputPhase', channel: output.channel + side, value: !output.phase[side] })
   }
 </script>
 
@@ -53,19 +56,23 @@
       defaultName={output.defaultName}
       {selected}
       onselect={select}
-      onrename={(name) => rename('output', output.pair, name)}
+      onrename={(name) => rename('output', output.channel, name)}
     />
-    <Knob
-      value={output.balance}
-      label={`Balance ${output.name}`}
-      onchange={(pan) => send({ type: 'setOutputBalance', output: output.pair, pan })}
-    />
+    {#if output.stereo}
+      <Knob
+        value={output.balance}
+        label={`Balance ${output.name}`}
+        onchange={(pan) => send({ type: 'setOutputBalance', output: output.channel, pan })}
+      />
+    {:else}
+      <div class="knob-space"></div>
+    {/if}
     <div class="buttons">
       <button
         class="toggle mute"
         aria-pressed={output.muted}
         title="Mute output"
-        onclick={() => send({ type: 'setOutputMuted', output: output.pair, value: !output.muted })}
+        onclick={() => send({ type: 'setOutputMuted', output: output.channel, value: !output.muted })}
       >M</button>
       <button class="toggle cue" disabled title="Cue arrives with the Control Room section">CUE</button>
     </div>
@@ -75,7 +82,7 @@
       <Fader
         db={output.volumeDb}
         label={`${output.name} volume`}
-        onchange={(db) => send({ type: 'setOutputVolume', output: output.pair, db })}
+        onchange={(db) => send({ type: 'setOutputVolume', output: output.channel, db })}
         unityShortcuts={output.pair !== 0}
       />
       <SettingsButton open={settingsOpen} ontoggle={() => (settingsOpen = !settingsOpen)} />
@@ -88,24 +95,33 @@
       <div class="settings-title">Settings</div>
       <button
         class="toggle wide"
-        aria-pressed="true"
-        disabled
-        title="Mono hardware outputs are not supported yet"
+        aria-pressed={output.stereo}
+        title="Stereo or two mono outputs"
+        onclick={() => send({ type: 'setOutputStereo', pair: output.pair, value: !output.stereo })}
       >Stereo</button>
-      <div class="phase-pair">
+      {#if output.stereo}
+        <div class="phase-pair">
+          <button
+            class="toggle phase"
+            aria-pressed={output.phase[0]}
+            title="Phase L: invert everything sent to the left output"
+            onclick={() => setPhase(0)}
+          >Ø L</button>
+          <button
+            class="toggle phase"
+            aria-pressed={output.phase[1]}
+            title="Phase R: invert everything sent to the right output"
+            onclick={() => setPhase(1)}
+          >R Ø</button>
+        </div>
+      {:else}
         <button
-          class="toggle phase"
+          class="toggle wide phase"
           aria-pressed={output.phase[0]}
-          title="Phase L: invert everything sent to the left output"
+          title="Phase: invert everything sent to this output"
           onclick={() => setPhase(0)}
-        >Ø L</button>
-        <button
-          class="toggle phase"
-          aria-pressed={output.phase[1]}
-          title="Phase R: invert everything sent to the right output"
-          onclick={() => setPhase(1)}
-        >R Ø</button>
-      </div>
+        >Ø Phase</button>
+      {/if}
       <button
         class="toggle wide"
         disabled
@@ -143,6 +159,10 @@
   }
   .strip.silenced .body {
     opacity: 0.45;
+  }
+  /* Keeps the rows aligned where a mono output has no balance knob. */
+  .knob-space {
+    height: 30px;
   }
   .buttons {
     display: flex;

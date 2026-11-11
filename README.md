@@ -63,15 +63,17 @@ Contributions and test reports for other models are welcome.
 
 - Submix mixer with pan or balance, mute, solo, stereo width, M/S and
   phase, and meters with peak hold.
-- Hardware output volume, balance, mute and phase.
+- Hardware output volume, balance, mute and phase. Each output pair can
+  be split into two mono outputs, like the input and playback rows. The
+  split is not remembered across restarts (the sound is the same).
 - Device Settings: levels, 48 V, instrument options, digital formats and
   clock source.
 - Rename channels by double-clicking the name. Names are saved in
   `~/.config/ffmixer/names.json`.
 - Faders respond to dragging, the mouse wheel and the keyboard, never to
   a single click.
-- Not yet: Talkback, No Trim, Loopback, mono outputs, and storing to or
-  reading from the unit's flash. These are shown but disabled.
+- Not yet: Talkback, No Trim, Loopback, and storing to or reading from
+  the unit's flash. These are shown but disabled.
 
 ## How it works
 

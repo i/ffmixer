@@ -9,7 +9,8 @@
 //!
 //! Width, M/S processing and output phase are not reconstructed: their
 //! crosspoints come back as mono strips and per-source phase, which
-//! sound the same. Mixed signs (M/S, or output phase on a source that
+//! sound the same. Outputs always come back as stereo pairs, with hard
+//! pans where the unit holds independent left and right mixes. Mixed signs (M/S, or output phase on a source that
 //! also feeds other outputs) are reported as above.
 
 use crate::law::{self, GAIN_MAX};
@@ -35,7 +36,7 @@ pub fn import(crosspoints: &Crosspoints) -> (Mixer, ImportReport) {
             law::from_dbus(crosspoints.outputs[2 * pair]),
             law::from_dbus(crosspoints.outputs[2 * pair + 1]),
         );
-        mixer.outputs[pair] = Output {
+        mixer.outputs[2 * pair] = Output {
             volume,
             balance,
             ..Output::default()
@@ -74,7 +75,7 @@ fn import_bank(
                     law::from_dbus(value(out_left, left)),
                     law::from_dbus(value(out_right, right)),
                 );
-                let send = &mut bank.channels[left].sends[out];
+                let send = &mut bank.channels[left].sends[out_left];
                 send.gain = gain;
                 send.pan = pan;
             } else {
@@ -91,7 +92,7 @@ fn import_bank(
                             law::gain_to_db(gain).unwrap_or(0.0),
                         ));
                     }
-                    let send = &mut bank.channels[channel].sends[out];
+                    let send = &mut bank.channels[channel].sends[out_left];
                     send.gain = gain.min(GAIN_MAX);
                     send.pan = pan;
                 }
@@ -187,10 +188,10 @@ mod tests {
         assert!(!mixer.inputs.stereo[2]);
         assert!(mixer.inputs.stereo[0]);
         // AN 5 is centred into PH 9/10.
-        let send = mixer.inputs.channels[4].sends[4];
+        let send = mixer.inputs.channels[4].sends[8];
         assert!(send.pan.abs() < 1e-9);
         // Line out 1/2 sits about 24 dB down with a slight balance.
-        let output = mixer.outputs[0];
+        let output = mixer.outputs[0]; // the pair's left channel holds it
         assert!((law::gain_to_db(output.volume).unwrap() + 23.8).abs() < 0.1);
         assert!(output.balance < 0.0);
     }

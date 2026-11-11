@@ -128,6 +128,11 @@ pub enum Action {
         pair: usize,
         value: bool,
     },
+    /// Switches an output pair between one stereo strip and two mono ones.
+    SetOutputStereo {
+        pair: usize,
+        value: bool,
+    },
     /// Phase of one output channel (0–27).
     SetOutputPhase {
         channel: usize,
@@ -190,7 +195,9 @@ impl Session {
         crosspoints: Crosspoints,
     ) {
         let (mut mixer, report) = mixer_core::import(&crosspoints);
-        mixer.selected_output = self.mixer.selected_output;
+        // The unit always loads as stereo pairs, so keep the selection on
+        // the pair's left channel.
+        mixer.selected_output = self.mixer.selected_output / 2 * 2;
         self.mixer = mixer;
         self.hardware = Some(crosspoints);
         self.warnings = report.warnings;
@@ -344,6 +351,7 @@ impl Session {
             } => mixer.set_phase(kind, channel, value),
             Action::SetWidth { kind, pair, width } => mixer.set_width(kind, pair, width),
             Action::SetMsProc { kind, pair, value } => mixer.set_ms_proc(kind, pair, value),
+            Action::SetOutputStereo { pair, value } => mixer.set_output_stereo(pair, value),
             Action::SetOutputPhase { channel, value } => mixer.set_output_phase(channel, value),
             Action::SetOutputVolume { output, db } => {
                 mixer.set_output_volume(output, law::db_to_gain(db))
@@ -473,6 +481,22 @@ mod tests {
         session.apply(Action::ToggleMuteMaster).unwrap();
         assert!(session.mixer.inputs.channels[0].muted);
         assert!(session.mixer.inputs.channels[4].muted);
+    }
+
+    #[test]
+    fn splitting_an_output_adds_a_strip_without_changing_the_unit() {
+        let mut session = Session::loading();
+        session.adopt_hardware("guid".to_owned(), Mixer::default().render());
+        session
+            .apply(Action::SetOutputStereo {
+                pair: 0,
+                value: false,
+            })
+            .unwrap();
+        assert_eq!(session.mixer.output_strips().len(), mixer_core::PAIRS + 1);
+        assert_eq!(session.pending_changes(), Some(0));
+        session.apply(Action::SelectOutput { output: 1 }).unwrap();
+        assert_eq!(session.mixer.selected_output, 1);
     }
 
     #[test]

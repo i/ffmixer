@@ -18,10 +18,12 @@
     strip: StripView
     row: MeterRow
     target: string
+    /** False while the selected output is mono: a send to it has no pan. */
+    outputStereo: boolean
     soloActive: boolean
   }
 
-  let { strip, row, target, soloActive }: Props = $props()
+  let { strip, row, target, outputStereo, soloActive }: Props = $props()
   let settingsOpen = $state(false)
 
   const silencedBySolo = $derived(soloActive && !strip.soloed)
@@ -48,11 +50,15 @@
       defaultName={strip.defaultName}
       onrename={(name) => rename(strip.kind, strip.channel, name)}
     />
-    <Knob
-      value={strip.pan}
-      label={`${strip.stereo ? 'Balance' : 'Pan'} ${strip.name}`}
-      onchange={(pan) => send({ type: 'setSendPan', kind: strip.kind, channel: strip.channel, pan })}
-    />
+    {#if outputStereo}
+      <Knob
+        value={strip.pan}
+        label={`${strip.stereo ? 'Balance' : 'Pan'} ${strip.name}`}
+        onchange={(pan) => send({ type: 'setSendPan', kind: strip.kind, channel: strip.channel, pan })}
+      />
+    {:else}
+      <div class="knob-space"></div>
+    {/if}
     <div class="buttons">
       <button
         class="toggle mute"
@@ -150,6 +156,10 @@
   .strip.silenced .body,
   .strip.silenced .gain {
     opacity: 0.45;
+  }
+  /* Keeps the rows aligned where a mono output has no pan knob. */
+  .knob-space {
+    height: 30px;
   }
   .buttons {
     display: flex;

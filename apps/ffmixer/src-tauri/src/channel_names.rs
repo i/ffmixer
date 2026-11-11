@@ -2,15 +2,16 @@
 //!
 //! Display only: nothing is sent to the unit. Saved to
 //! `$XDG_CONFIG_HOME/ffmixer/names.json` (or `~/.config/...`). Source
-//! strips are keyed by their first channel, outputs by stereo pair, so a
-//! stereo strip split into two mono strips keeps its name on the left.
+//! and output strips are keyed by their first channel, so a stereo strip
+//! split into two mono strips keeps its name on the left. Versions up to
+//! 0.1.2 keyed outputs by stereo pair; those names are moved on load.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use mixer_core::{CHANNELS, OUTPUT_PAIRS};
+use mixer_core::CHANNELS;
 use serde::{Deserialize, Serialize};
 
 /// Longest name kept, in characters; strips show about 10.
@@ -31,11 +32,15 @@ pub struct ChannelNames {
     #[serde(default)]
     playbacks: BTreeMap<usize, String>,
     #[serde(default)]
+    output_strips: BTreeMap<usize, String>,
+    /// Output names saved by pair, before outputs could be split. Moved
+    /// into `output_strips` on load and never written back.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     outputs: BTreeMap<usize, String>,
 }
 
 impl ChannelNames {
-    /// The custom name for a source strip's first channel or an output pair.
+    /// The custom name for a strip's first channel.
     pub fn get(
         &self,
         row: NameRow,
@@ -51,11 +56,7 @@ impl ChannelNames {
         index: usize,
         name: Option<&str>,
     ) -> Result<(), String> {
-        let limit = match row {
-            NameRow::Input | NameRow::Playback => CHANNELS,
-            NameRow::Output => OUTPUT_PAIRS,
-        };
-        if index >= limit {
+        if index >= CHANNELS {
             return Err(format!("no channel {index} to rename"));
         }
         let cleaned = name.map(clean).unwrap_or_default();
@@ -82,10 +83,22 @@ impl ChannelNames {
     }
 
     fn load_from(path: &Path) -> Self {
-        fs::read_to_string(path)
+        let mut names: Self = fs::read_to_string(path)
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        names.move_pair_names();
+        names
+    }
+
+    /// Output names used to be keyed by pair; an output strip is now keyed
+    /// by its first channel, which is twice the pair number.
+    fn move_pair_names(&mut self) {
+        for (pair, name) in std::mem::take(&mut self.outputs) {
+            if 2 * pair < CHANNELS {
+                self.output_strips.entry(2 * pair).or_insert(name);
+            }
+        }
     }
 
     /// Saves atomically: write a temporary file, then rename it over.
@@ -109,7 +122,7 @@ impl ChannelNames {
         match row {
             NameRow::Input => &self.inputs,
             NameRow::Playback => &self.playbacks,
-            NameRow::Output => &self.outputs,
+            NameRow::Output => &self.output_strips,
         }
     }
 
@@ -120,7 +133,7 @@ impl ChannelNames {
         match row {
             NameRow::Input => &mut self.inputs,
             NameRow::Playback => &mut self.playbacks,
-            NameRow::Output => &mut self.outputs,
+            NameRow::Output => &mut self.output_strips,
         }
     }
 }
@@ -180,7 +193,7 @@ mod tests {
     fn out_of_range_is_rejected() {
         let mut names = ChannelNames::default();
         assert!(names.set(NameRow::Input, CHANNELS, Some("x")).is_err());
-        assert!(names.set(NameRow::Output, OUTPUT_PAIRS, Some("x")).is_err());
+        assert!(names.set(NameRow::Output, CHANNELS, Some("x")).is_err());
     }
 
     #[test]
@@ -213,5 +226,28 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
         assert_eq!(ChannelNames::load_from(&path), ChannelNames::default());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn pair_keyed_output_names_move_to_their_first_channel() {
+        let dir = std::env::temp_dir().join(format!("ffmixer-legacy-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("names.json");
+        fs::write(
+            &path,
+            r#"{"inputs":{"0":"Kick"},"outputs":{"0":"Monitors","3":"Cans"}}"#,
+        )
+        .unwrap();
+        let names = ChannelNames::load_from(&path);
+        assert_eq!(names.get(NameRow::Output, 0), Some("Monitors"));
+        assert_eq!(names.get(NameRow::Output, 6), Some("Cans"));
+        assert_eq!(names.get(NameRow::Output, 3), None);
+        assert_eq!(names.get(NameRow::Input, 0), Some("Kick"));
+        // Saved again, the old key is gone, so a second load moves nothing.
+        names.save_to(&path).unwrap();
+        let again = ChannelNames::load_from(&path);
+        assert_eq!(again, names);
+        assert_eq!(again.get(NameRow::Output, 6), Some("Cans"));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
