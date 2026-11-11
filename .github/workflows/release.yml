@@ -75,7 +75,7 @@ jobs:
           microphones or other equipment, speakers, headphones or your
           hearing. It has been tested on one Fireface 800 on one Fedora
           machine and comes without warranty (see LICENSE). Turn monitors
-          and headphones down before going live.
+          and headphones down before starting it.
 
           Needs FFADO 2.4.x (`ffado-dbus-server`), access to `/dev/fw*`
           and WebKitGTK 4.1. See `docs/setup.md` in the archive. Verify the

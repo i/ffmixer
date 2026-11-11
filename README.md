@@ -8,7 +8,7 @@ by TotalMix FX. It controls the unit through [FFADO](https://ffado.org).
 > equipment (48 V phantom power), speakers or headphones, or your
 > hearing (a sudden loud signal). It has only been tested on one
 > Fireface 800 on one Fedora machine. Turn monitors and headphones down
-> and disconnect anything delicate before you go live.
+> and disconnect anything delicate before you start ffmixer.
 >
 > There is no warranty and no liability; see sections 15 and 16 of the
 > [license](LICENSE).
@@ -27,8 +27,7 @@ to edit what is sent to it.
 
 **Device Settings** has the options from RME's Fireface Settings dialog:
 input source, levels, 48 V, instrument options, digital formats and
-clock source, plus clock and input lock status. They can be changed once
-you go live.
+clock source, plus clock and input lock status.
 
 <br clear="right">
 
@@ -58,10 +57,12 @@ Contributions and test reports for other models are welcome.
 
 ## How it works
 
-ffmixer starts **read-only**: it shows the unit's mix and live meters,
-and changes stay in the app until you press **Go live**. From then on
-changes are sent as you make them, until you press **Stop sending**.
-Without a unit or FFADO it starts in demo mode.
+When ffmixer starts it reads the unit's mix and shows live meters. It
+sends nothing until you change something, and from then on changes are
+sent as you make them. If it can't connect, or the connection drops, the
+Control Strip says why and a **Reconnect** button reads the unit again
+(changes that were not sent are discarded). Without a unit or FFADO it
+starts in demo mode.
 
 Safeguards:
 

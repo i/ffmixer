@@ -6,7 +6,8 @@
 > speakers, headphones or your hearing. It has only been tested on one
 > Fireface 800 on one Fedora machine. There is no warranty (see
 > [LICENSE](../LICENSE)). Turn monitors and headphones down and
-> disconnect delicate equipment before you go live for the first time.
+> disconnect delicate equipment before you start ffmixer for the first
+> time.
 
 ffmixer controls an RME Fireface through FFADO's `ffado-dbus-server` and
 reads the level meters directly from the FireWire device. Only the
@@ -117,14 +118,16 @@ cd apps/ffmixer && npm run check
 
 ## 6. First run
 
-1. The Control Strip (right) shows **Read-only** and "In sync with
-   unit". If it says **Demo**, the app could not reach FFADO or the
-   unit, and the status line says why.
+1. The Control Strip (right) shows **Live** and "In sync with unit".
+   If it says **Demo**, the app could not reach FFADO or the unit. If it
+   says **Offline**, it found the unit but could not start sending. The
+   status line says why in both cases.
 2. The meters move on their own.
-3. **Go live** re-reads the unit and sends every change from then on.
-   **Stop sending** ends it.
-4. **Device Settings** can only be changed while live. Risky changes
-   ask for confirmation first.
+3. Changes are sent to the unit as you make them. If the connection is
+   lost, press **Reconnect**: it reads the unit again, and changes that
+   were not sent are discarded.
+4. **Device Settings** can only be changed while connected. Risky
+   changes ask for confirmation first.
 
 Channel names are saved in `~/.config/ffmixer/names.json`. Nothing is
 saved to the unit's flash, so it forgets what ffmixer sent when it is
@@ -137,9 +140,9 @@ powered off.
 | "Demo mode: cannot reach ffado-dbus-server" or "reports no devices" | FFADO is missing, didn't start, or can't see the unit. Run `ffado-dbus-server -v3` and read the output. Check section 2 first. |
 | `journalctl --user -b -g ffado` shows "No FireWire adapters found" | No access to `/dev/fw*`. Redo section 2 and log in again. |
 | `ls /dev/fw*` shows only `fw0` | The unit is off or disconnected, or the cable or port is faulty. |
-| Go live refused: "FFADO has N mute/invert flags set" | `ffado-mixer` set flags that would apply to what ffmixer sends. Clear them there, or restart `ffado-dbus-server`. |
-| "Stopped sending: ffado-dbus-server restarted" | The server restarted and reloaded the flash mix. Press **Reload from unit**, then go live again. |
-| "Stopped sending" with another message | A write failed. The unit may not match what is shown. Press **Reload from unit**. |
+| "Not sending: FFADO has N mute/invert flags set" | `ffado-mixer` set flags that would apply to what ffmixer sends. Clear them there, or restart `ffado-dbus-server`. |
+| "Stopped sending: ffado-dbus-server restarted" | The server restarted and reloaded the flash mix. Press **Reconnect**. |
+| "Stopped sending" with another message | A write failed. The unit may not match what is shown. Press **Reconnect**. |
 | Device Settings says FFADO did not report the settings | Restart the app. If it persists, check `ffado-dbus-server -v3`. |
 | Crash at start on Wayland ("Error 71") | WebKitGTK's DMA-BUF renderer. The app turns it off by default. Unset `WEBKIT_DISABLE_DMABUF_RENDERER=0` if you set it. |
 | Meters stay at the floor | The meter reader needs access to `/dev/fw1` (section 2), and something must be playing. |
