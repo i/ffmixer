@@ -31,6 +31,26 @@ hardware/FFADO findings, and `docs/setup.md` to get started.
 > are trademarks of RME Audio / Audio AG. They are used here only to say
 > which hardware this works with and what it is modelled on.
 
+## Screenshots
+
+![ffmixer showing a Fireface 800: hardware inputs, software playback and hardware outputs, with the Control Strip on the right](docs/images/ffmixer.png)
+
+The three rows are the hardware inputs, the software playback channels
+and the hardware outputs. Click an output to edit what is sent to it
+(its submix). The Control Strip on the right has the **Go live** switch,
+mute and solo masters, and the view options.
+
+<img src="docs/images/device-settings.png" alt="The Device Settings panel in the Control Strip" align="right" width="158">
+
+**Device Settings** (Control Strip) is the Fireface Settings dialog:
+input source, line levels, 48 V phantom power, instrument options,
+digital formats, clock source, and live clock and input lock status.
+Here it is read-only (shown as the unit holds them); the controls
+become active when you go live, and risky changes ask for confirmation
+first.
+
+<br clear="right">
+
 ## Layout
 
 | Path | Purpose |
