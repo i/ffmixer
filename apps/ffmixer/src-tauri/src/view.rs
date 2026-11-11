@@ -1,5 +1,8 @@
 //! What the UI receives: a flat, display-ready snapshot of the session.
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use ffado_dbus::settings::DeviceSettings;
 use mixer_core::{OUTPUT_PAIRS, SourceKind, law, names};
 use serde::Serialize;
@@ -12,9 +15,29 @@ pub const MAIN_PAIR: usize = 0;
 /// Output pair feeding the front headphone jack (PH 9/10).
 pub const PHONES_PAIR: usize = 4;
 
+/// Last revision handed out. Snapshots are built while the session lock
+/// is held, so a higher revision is always a newer state.
+static REVISION: AtomicU64 = AtomicU64::new(0);
+
+/// What the status area shows: (live, changes not yet sent).
+pub type SyncKey = (bool, Option<usize>);
+
+/// The sync state in the newest snapshot built, whichever path sent it
+/// (command reply or writer event). The writer compares against this, so
+/// it also corrects a reply that showed changes it has since sent.
+static LAST_SHOWN: Mutex<Option<SyncKey>> = Mutex::new(None);
+
+pub fn last_shown() -> Option<SyncKey> {
+    *LAST_SHOWN.lock().expect("last shown lock")
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewState {
+    /// Grows with every snapshot. The UI drops any snapshot older than
+    /// the one it shows, because a command reply can arrive after a newer
+    /// event from the writer.
+    pub revision: u64,
     pub mode: &'static str,
     pub device: String,
     pub status: String,
@@ -150,7 +173,11 @@ impl ViewState {
             })
             .collect();
 
+        let sync: SyncKey = (session.is_live(), session.pending_changes());
+        *LAST_SHOWN.lock().expect("last shown lock") = Some(sync);
+
         Self {
+            revision: REVISION.fetch_add(1, Ordering::SeqCst) + 1,
             mode: match session.mode {
                 Mode::Loading => "loading",
                 Mode::Hardware => "hardware",
@@ -164,8 +191,8 @@ impl ViewState {
             outputs,
             any_muted: mixer.any_muted(),
             any_soloed: mixer.any_soloed(),
-            pending_changes: session.pending_changes(),
-            live: session.is_live(),
+            pending_changes: sync.1,
+            live: sync.0,
             device_settings: session.device_settings,
             warnings: session.warnings.clone(),
         }

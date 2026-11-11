@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::view::ViewState;
+use crate::view::{self, ViewState};
 use crate::{STATE_EVENT, SharedSession};
 
 const TICK: Duration = Duration::from_millis(10);
@@ -23,12 +23,13 @@ pub fn spawn(
     thread::spawn(move || {
         let mut last_check = Instant::now();
         let mut last_emit = Instant::now();
-        let mut emitted = None;
         loop {
             thread::sleep(TICK);
             let snapshot = {
                 let mut session = session.lock().expect("session lock");
-                if !session.is_live() && emitted.is_none() {
+                // Offline and already shown as offline: nothing to report.
+                let shown = view::last_shown();
+                if !session.is_live() && shown.is_none_or(|(live, _)| !live) {
                     continue;
                 }
                 if last_check.elapsed() >= LINK_CHECK_EVERY {
@@ -39,13 +40,14 @@ pub fn spawn(
                 let key = (session.is_live(), session.pending_changes());
                 let settled = key.1 == Some(0) || !key.0;
                 let due = settled || last_emit.elapsed() >= EMIT_EVERY;
-                (emitted != Some(key) && due).then(|| (key, ViewState::from_session(&session)))
+                // Compare with what the UI was last shown from any path, not
+                // just what this thread sent: a command reply can carry a
+                // count the writer has since cleared.
+                (shown != Some(key) && due).then(|| ViewState::from_session(&session))
             };
-            if let Some((key, state)) = snapshot {
+            if let Some(state) = snapshot {
                 let _ = app.emit(STATE_EVENT, state);
                 last_emit = Instant::now();
-                // Once offline and reported, go idle until live again.
-                emitted = if key.0 { Some(key) } else { None };
             }
         }
     });

@@ -41,6 +41,8 @@ export interface OutputView {
 }
 
 export interface ViewState {
+  /** Grows with every snapshot; older ones must be ignored. */
+  revision: number
   mode: Mode
   device: string
   status: string

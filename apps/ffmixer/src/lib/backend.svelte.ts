@@ -14,6 +14,16 @@ export const session = $state<{ view: ViewState | null; error: string }>({
   error: '',
 })
 
+/**
+ * Shows a snapshot unless a newer one is already shown. A command's reply
+ * can arrive after a newer event from the writer, and would otherwise put
+ * back an out-of-date "Sending n changes…".
+ */
+function show(view: ViewState): void {
+  if (session.view && view.revision < session.view.revision) return
+  session.view = view
+}
+
 const queue = new Map<string, Action>()
 let flushScheduled = false
 let flushing = false
@@ -57,7 +67,7 @@ async function flush(): Promise<void> {
       const [key, action] = queue.entries().next().value as [string, Action]
       queue.delete(key)
       try {
-        session.view = await invoke<ViewState>('apply', { action })
+        show(await invoke<ViewState>('apply', { action }))
         session.error = ''
       } catch (error) {
         session.error = String(error)
@@ -73,12 +83,12 @@ export const deviceStatus = $state<{ value: ClockStatus | null }>({ value: null 
 
 export async function connect(): Promise<void> {
   await listen<ViewState>('state', (event) => {
-    session.view = event.payload
+    show(event.payload)
   })
   await listen<ClockStatus | null>('device-status', (event) => {
     deviceStatus.value = event.payload
   })
-  session.view = await invoke<ViewState>('get_state')
+  show(await invoke<ViewState>('get_state'))
 }
 
 /** Runs a command that replaces the whole view, e.g. going live. */
@@ -87,7 +97,7 @@ async function command(
   args: Record<string, unknown> = {},
 ): Promise<void> {
   try {
-    session.view = await invoke<ViewState>(name, args)
+    show(await invoke<ViewState>(name, args))
     session.error = ''
   } catch (error) {
     session.error = String(error)
