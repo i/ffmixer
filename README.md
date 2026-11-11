@@ -45,7 +45,7 @@ clock source, plus clock and input lock status.
 <details>
 <summary>Show the Device Settings panel</summary>
 
-<img src="docs/images/device-settings.png" alt="Device Settings panel" width="158">
+<img src="docs/images/device-settings.png" alt="Device Settings panel" width="152">
 
 </details>
 
