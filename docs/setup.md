@@ -83,8 +83,10 @@ may be louder than you expect.
 
 ## 5. Get the app
 
-**Download a release.** Each release has a
-`ffmixer-<version>-linux-x86_64.tar.gz` and a `.sha256` file:
+**Download a release.** Each release has a tarball and a `.sha256` file
+for 64-bit systems (`x86_64`) and for 32-bit x86 (`i686`). The 32-bit
+build has not been run on real hardware. Use the one that matches your
+system (`uname -m` prints `x86_64` or `i686`):
 
 ```bash
 sha256sum -c ffmixer-*-linux-x86_64.tar.gz.sha256
@@ -92,7 +94,8 @@ tar xzf ffmixer-*-linux-x86_64.tar.gz
 ./ffmixer-*/ffmixer
 ```
 
-It is built on Ubuntu 22.04 and needs the WebKitGTK 4.1 runtime package
+The 32-bit build also needs the 32-bit WebKitGTK package. The builds
+are made on Ubuntu 22.04 and needs the WebKitGTK 4.1 runtime package
 (`libwebkit2gtk-4.1-0` or `webkit2gtk4.1`) and a glibc at least as new
 as Ubuntu 22.04's. You still need FFADO and the permissions above.
 

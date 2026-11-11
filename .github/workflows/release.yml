@@ -1,17 +1,38 @@
 name: Release
 
-# Push a tag like v0.1.0 to build a Linux x86_64 binary and publish it as
-# a pre-release. The tag must match the version in tauri.conf.json.
+# Push a tag like v0.1.0 to build Linux binaries (64-bit and 32-bit x86)
+# and publish them as a pre-release. The tag must match the version in
+# tauri.conf.json.
 on:
   push:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
+    name: build (${{ matrix.arch }})
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            packages: >-
+              libwebkit2gtk-4.1-dev
+              libxdo-dev
+              libssl-dev
+              libayatana-appindicator3-dev
+              librsvg2-dev
+          - arch: i686
+            target: i686-unknown-linux-gnu
+            packages: >-
+              gcc-multilib
+              libwebkit2gtk-4.1-dev:i386
+              libssl-dev:i386
+              librsvg2-dev:i386
     steps:
       - uses: actions/checkout@v4
 
@@ -25,18 +46,21 @@ jobs:
 
       - name: Install system packages
         run: |
+          if [ "${{ matrix.arch }}" = i686 ]; then
+            sudo dpkg --add-architecture i386
+            echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
+            echo "PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> "$GITHUB_ENV"
+          fi
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
+          sudo apt-get install -y build-essential ${{ matrix.packages }}
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
 
       - uses: actions/setup-node@v4
         with:
@@ -51,24 +75,43 @@ jobs:
           npm run build
           npm run check
           cd ../..
-          cargo test --workspace
+          cargo test --workspace --target ${{ matrix.target }}
 
       - name: Build
         working-directory: apps/ffmixer
-        run: npm run tauri -- build --no-bundle
+        run: npm run tauri -- build --no-bundle --target ${{ matrix.target }}
 
       - name: Package
         run: |
-          name="ffmixer-${GITHUB_REF_NAME}-linux-x86_64"
+          name="ffmixer-${GITHUB_REF_NAME}-linux-${{ matrix.arch }}"
           mkdir -p "dist/$name/docs"
-          cp target/release/ffmixer LICENSE README.md "dist/$name/"
+          cp "target/${{ matrix.target }}/release/ffmixer" LICENSE README.md "dist/$name/"
           cp docs/setup.md "dist/$name/docs/"
           tar -C dist -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmixer-${{ matrix.arch }}
+          path: |
+            ffmixer-*.tar.gz
+            ffmixer-*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ffmixer-*
+          merge-multiple: true
+
       - name: Release notes
         run: |
-          cat > notes.md <<'EOF'
+          cat > notes.md <<'NOTES'
           **Pre-release. Use at your own risk.** ffmixer sends commands
           straight to audio hardware and can change 48 V phantom power,
           levels and the clock. A mistake or a bug could damage
@@ -77,20 +120,25 @@ jobs:
           machine and comes without warranty (see LICENSE). Turn monitors
           and headphones down before starting it.
 
+          Downloads: `x86_64` for 64-bit systems, `i686` for 32-bit x86.
+          The 32-bit build compiles and passes the tests, but has not
+          been run on real hardware.
+
           Needs FFADO 2.4.x (`ffado-dbus-server`), access to `/dev/fw*`
           and WebKitGTK 4.1. See `docs/setup.md` in the archive. Verify the
           download with `sha256sum -c`.
 
           Not affiliated with or endorsed by RME.
-          EOF
+          NOTES
 
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --prerelease \
             --title "ffmixer $GITHUB_REF_NAME" \
             --notes-file notes.md \
-            ffmixer-*-linux-x86_64.tar.gz \
-            ffmixer-*-linux-x86_64.tar.gz.sha256
+            ffmixer-*.tar.gz \
+            ffmixer-*.tar.gz.sha256
