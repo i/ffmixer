@@ -68,11 +68,10 @@ Safeguards:
 
 - It can only write mixer gains and the settings in the panel. Flash and
   the sample rate cannot be changed.
-- 48 V on, level changes, Drive, Limiter and clock changes ask for
-  confirmation first.
-- Speaker Emulation cannot be switched on: FFADO's register bits for it
-  drove input 1 to full scale on a Fireface 800 (see the reference doc). The **Hide warnings** checkbox at the bottom of
-  the sidebar skips these questions; it is off by default and remembered.
+- 48 V on, level changes, any instrument option (Speaker Emulation,
+  Drive, Limiter) and clock changes ask for confirmation first. The
+  **Hide warnings** checkbox at the bottom of the sidebar skips these
+  questions; it is off by default and remembered.
 - Gains are capped at +6 dB and fade in. Each setting is read back to
   check that it was applied.
 - It stops sending if the FFADO server restarts, because a new server

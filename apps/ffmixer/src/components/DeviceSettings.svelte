@@ -249,10 +249,8 @@
         <button
           class="toggle wide span"
           aria-pressed={s.instrument.speakerEmulation}
-          disabled={!editable || !s.instrument.speakerEmulation}
-          title={s.instrument.speakerEmulation
-            ? 'Speaker Emulation is on; click to switch it off'
-            : 'Disabled: FFADO drives input 1 to full scale with this on (see docs)'}
+          disabled={!editable}
+          title="Speaker Emulation: removes low and high frequencies"
           onclick={() =>
             request(
               { control: 'speakerEmulation', on: !s.instrument.speakerEmulation },
