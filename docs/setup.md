@@ -1,5 +1,14 @@
 # Setup guide
 
+> **Use at your own risk.** ffmixer sends commands straight to audio
+> hardware and can change 48 V phantom power, levels and the clock. A
+> mistake or a bug could damage microphones or other equipment,
+> speakers, headphones or your hearing. It has been tested on one
+> Fireface 800 on one Fedora machine. It comes without warranty and the
+> authors accept no liability (see [LICENSE](../LICENSE)). Turn monitors
+> and headphones down and disconnect delicate equipment before you go
+> live for the first time.
+
 ffmixer is a mixer for the **RME Fireface 800** on Linux. It talks to
 the unit through FFADO's `ffado-dbus-server` (mixer and settings) and
 reads the level meters directly from the FireWire device. This guide
@@ -90,10 +99,29 @@ not for audio streaming.
 ffmixer itself starts **read-only** every time: it shows the unit's mix
 and meters, and sends nothing until you press **Go live**.
 
-## 6. Build and run
+## 6. Get the app
+
+### Download a release
+
+Release pages have a `ffmixer-<version>-linux-x86_64.tar.gz` and its
+`.sha256`. Verify and unpack it:
 
 ```bash
-git clone <repository-url> ffmixer
+sha256sum -c ffmixer-*-linux-x86_64.tar.gz.sha256
+tar xzf ffmixer-*-linux-x86_64.tar.gz
+./ffmixer-*/ffmixer
+```
+
+The binary is built on Ubuntu 22.04 and needs WebKitGTK 4.1 (the
+runtime package, e.g. `libwebkit2gtk-4.1-0` or `webkit2gtk4.1`) and a
+glibc at least as new as Ubuntu 22.04's. You still need FFADO and the
+permissions from sections 2 to 5. Releases are pre-releases and tested
+on one Fireface 800 only.
+
+### Build from source
+
+```bash
+git clone https://github.com/i/ffmixer.git
 cd ffmixer/apps/ffmixer
 npm install
 npm run tauri dev                 # development: hot reload

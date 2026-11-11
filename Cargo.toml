@@ -11,6 +11,8 @@ members = [
 [workspace.package]
 edition = "2024"
 publish = false
+license = "GPL-3.0-or-later"
+repository = "https://github.com/i/ffmixer"
 
 [workspace.dependencies]
 ffado-dbus = { path = "crates/ffado-dbus" }

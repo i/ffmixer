@@ -1,8 +1,35 @@
 # ffmixer
 
-A TotalMix FX-style mixer for the RME Fireface 800 on Linux, built on
-`ffado-dbus-server`. See `docs/totalmix-fx-reference.md` for the target
-design and the hardware/FFADO findings.
+A mixer for the RME Fireface 800 on Linux, with a workflow inspired by
+RME's TotalMix FX, built on FFADO's `ffado-dbus-server`. RME does not
+offer TotalMix for Linux; this fills that gap. See
+`docs/totalmix-fx-reference.md` for the target design and the
+hardware/FFADO findings, and `docs/setup.md` to get started.
+
+> **Warning: use at your own risk.** ffmixer sends commands straight to
+> audio hardware. Misused, or through a bug, it could:
+>
+> - **damage microphones and other equipment** (48 V phantom power can
+>   destroy ribbon microphones and some unbalanced or active sources);
+> - **damage speakers, headphones or your hearing** (a level, gain or
+>   routing change can produce a sudden, very loud signal);
+> - leave the unit in an unexpected state, interrupt audio, or change
+>   settings you did not mean to change.
+>
+> It has been tested on **one Fireface 800 on one Fedora machine**. Its
+> safeguards (confirmations, gain limits and ramping, read-back checks)
+> reduce the risk but do not remove it. Before going live: turn monitors
+> and headphones down, and disconnect anything that must not receive 48 V
+> or a loud signal.
+>
+> The software is provided **as is, without warranty of any kind**. The
+> authors and contributors accept no liability for damage to hardware,
+> equipment, hearing, data or anything else; see sections 15 and 16 of
+> the [license](LICENSE).
+>
+> **Not affiliated with or endorsed by RME.** RME, Fireface and TotalMix
+> are trademarks of RME Audio / Audio AG. They are used here only to say
+> which hardware this works with and what it is modelled on.
 
 ## Layout
 
@@ -103,3 +130,22 @@ cargo test --workspace
 cargo test -p ffmixer -- --ignored   # go-live checks against the running server (reads only)
 cargo run -p ffado-probe -- 5     # 5 s of meters; 0 skips them
 ```
+
+## License
+
+GPL-3.0-or-later; see [LICENSE](LICENSE).
+
+## Credits
+
+- [FFADO](https://ffado.org) (GPL): `ffado-dbus-server` does all the
+  mixer and settings control. ffmixer talks to it over D-Bus and does not
+  include or link its code. Its source was the reference for the value
+  encodings recorded in the reference doc.
+- [snd-firewire-ctl-services](https://github.com/alsa-project/snd-firewire-ctl-services)
+  by Takashi Sakamoto (LGPL-3.0-or-later): documents the Fireface
+  level-meter layout. `crates/fw-meter` is an independent implementation
+  of that layout, not a copy of its code.
+- RME's *Fireface 800 User's Guide*, which describes the behaviour the
+  UI follows. The manual and screenshots are RME's and are not included
+  in this repository.
+
