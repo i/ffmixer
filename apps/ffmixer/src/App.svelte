@@ -16,6 +16,14 @@
   })
 
   const view = $derived(session.view)
+  /** Main (AN 1/2) and Phones (PH 9/10) sit at the right end, as in TotalMix. */
+  const MONITOR_PAIRS = [0, 4]
+  const monitorOutputs = $derived(
+    view ? MONITOR_PAIRS.map((pair) => view.outputs[pair]) : [],
+  )
+  const otherOutputs = $derived(
+    view ? view.outputs.filter((output) => !MONITOR_PAIRS.includes(output.pair)) : [],
+  )
   const target = $derived(view ? view.outputs[view.selectedOutput].name : '')
 </script>
 
@@ -44,7 +52,11 @@
         <Row title="Software Playback">{@render playbacks()}</Row>
       {/if}
       <Row title="Hardware Outputs">
-        {#each view.outputs as output (output.pair)}
+        {#each otherOutputs as output (output.pair)}
+          <OutputStrip {output} selected={output.pair === view.selectedOutput} />
+        {/each}
+        <div class="spacer"></div>
+        {#each monitorOutputs as output (output.pair)}
           <OutputStrip {output} selected={output.pair === view.selectedOutput} />
         {/each}
       </Row>
@@ -73,6 +85,10 @@
     gap: 6px;
     padding: 6px;
     background: #16181b;
+  }
+  .spacer {
+    flex: 1;
+    min-width: 12px;
   }
   .divider {
     width: 4px;

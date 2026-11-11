@@ -162,6 +162,9 @@ Right-click an output: **Clear Submix**, **Copy Submix**, **Paste Submix**.
 
 - **Assign** menu: Main Out, Main Out B, Phones 1–4, Cue/PFL target.
   Assigned outputs move out of row 3 into this section and are renamed.
+  ffmixer has no Control Room section yet; as a first step it shows AN 1/2
+  ("Main") and PH 9/10 ("Phones") at the right end of row 3, apart from
+  the other outputs. They stay in row 3 and can be renamed.
 - Buttons: **Dim**, **Recall**, **Speaker B** (with Link to gang the
   Main/B faders), **Mono**, **Talkback**, **Ext. Input**.
 - Talkback dims the Phones and routes the talkback mic to them.

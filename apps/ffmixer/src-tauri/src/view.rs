@@ -7,6 +7,11 @@ use serde::Serialize;
 use crate::channel_names::NameRow;
 use crate::session::{Mode, Session};
 
+/// Output pair feeding the main monitors (AN 1/2).
+pub const MAIN_PAIR: usize = 0;
+/// Output pair feeding the front headphone jack (PH 9/10).
+pub const PHONES_PAIR: usize = 4;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewState {
@@ -124,7 +129,11 @@ impl ViewState {
         let outputs = (0..OUTPUT_PAIRS)
             .map(|pair| {
                 let output = mixer.outputs[pair];
-                let default_name = names::pair_name(2 * pair, names::output_name);
+                let default_name = match pair {
+                    MAIN_PAIR => "Main".to_owned(),
+                    PHONES_PAIR => "Phones".to_owned(),
+                    _ => names::pair_name(2 * pair, names::output_name),
+                };
                 OutputView {
                     pair,
                     name: session
