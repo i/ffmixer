@@ -15,8 +15,29 @@ use std::time::{Duration, Instant};
 /// event struct; 4 keeps the classic `fw_cdev_event_response`.
 const CLIENT_ABI_VERSION: u32 = 4;
 
-const IOC_GET_INFO: libc::c_ulong = 0xc028_2300;
-const IOC_SEND_REQUEST: libc::c_ulong = 0x4028_2301;
+/// Builds a Linux ioctl number the way `<linux/ioctl.h>` does: direction,
+/// argument size, type and number. The size is part of the number, and
+/// it differs by architecture: `u64` is 8-byte aligned on x86_64 but only
+/// 4-byte aligned on 32-bit x86, which makes these structs 36 bytes there
+/// instead of 40. The field offsets are the same on both.
+const fn ioctl_number(
+    direction: u32,
+    number: u32,
+    size: usize,
+) -> libc::c_ulong {
+    const TYPE: u32 = b'#' as u32;
+    ((direction << 30) | ((size as u32) << 16) | (TYPE << 8) | number) as libc::c_ulong
+}
+
+const IOC_WRITE: u32 = 1;
+const IOC_READ: u32 = 2;
+
+/// `FW_CDEV_IOC_GET_INFO`, `_IOWR('#', 0x00, struct fw_cdev_get_info)`.
+const IOC_GET_INFO: libc::c_ulong =
+    ioctl_number(IOC_READ | IOC_WRITE, 0x00, std::mem::size_of::<GetInfo>());
+/// `FW_CDEV_IOC_SEND_REQUEST`, `_IOW('#', 0x01, struct fw_cdev_send_request)`.
+const IOC_SEND_REQUEST: libc::c_ulong =
+    ioctl_number(IOC_WRITE, 0x01, std::mem::size_of::<SendRequest>());
 
 const EVENT_BUS_RESET: u32 = 0x00;
 const EVENT_RESPONSE: u32 = 0x01;
@@ -64,9 +85,22 @@ struct SendRequest {
     generation: u32,
 }
 
-const _: () = assert!(std::mem::size_of::<GetInfo>() == 40);
-const _: () = assert!(std::mem::size_of::<EventBusReset>() == 40);
-const _: () = assert!(std::mem::size_of::<SendRequest>() == 40);
+// Field offsets are fixed by the kernel ABI on every architecture.
+const _: () = assert!(std::mem::offset_of!(GetInfo, bus_reset) == 16);
+const _: () = assert!(std::mem::offset_of!(GetInfo, card) == 32);
+const _: () = assert!(std::mem::offset_of!(EventBusReset, generation) == 32);
+const _: () = assert!(std::mem::offset_of!(SendRequest, offset) == 8);
+const _: () = assert!(std::mem::offset_of!(SendRequest, data) == 24);
+const _: () = assert!(std::mem::offset_of!(SendRequest, generation) == 32);
+// Total sizes follow the alignment of `u64` (see `ioctl_number`).
+const STRUCT_SIZE: usize = if std::mem::align_of::<u64>() == 8 {
+    40
+} else {
+    36
+};
+const _: () = assert!(std::mem::size_of::<GetInfo>() == STRUCT_SIZE);
+const _: () = assert!(std::mem::size_of::<EventBusReset>() == STRUCT_SIZE);
+const _: () = assert!(std::mem::size_of::<SendRequest>() == STRUCT_SIZE);
 
 /// Offsets inside `struct fw_cdev_event_response` (size 24, data at 20).
 const RESPONSE_TYPE_OFFSET: usize = 8;
@@ -238,4 +272,23 @@ fn read_u32(
     offset: usize,
 ) -> u32 {
     u32::from_ne_bytes(buffer[offset..offset + 4].try_into().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Values from `<linux/firewire-cdev.h>` compiled for each ABI.
+    #[test]
+    fn ioctl_numbers_match_the_kernel_header() {
+        if std::mem::align_of::<u64>() == 8 {
+            // x86_64: checked against the system header with a C program.
+            assert_eq!(IOC_GET_INFO, 0xc028_2300);
+            assert_eq!(IOC_SEND_REQUEST, 0x4028_2301);
+        } else {
+            // 32-bit x86: the same encoding with 36-byte structs.
+            assert_eq!(IOC_GET_INFO, 0xc024_2300);
+            assert_eq!(IOC_SEND_REQUEST, 0x4024_2301);
+        }
+    }
 }
