@@ -16,8 +16,8 @@
   })
 
   const view = $derived(session.view)
-  /** Main (AN 1/2) and Phones (PH 9/10) sit at the right end, as in TotalMix. */
-  const MONITOR_PAIRS = [0, 4]
+  /** Phones (PH 9/10) then Main (AN 1/2) sit at the right end, as in TotalMix. */
+  const MONITOR_PAIRS = [4, 0]
   const monitorOutputs = $derived(
     view ? MONITOR_PAIRS.map((pair) => view.outputs[pair]) : [],
   )
