@@ -280,6 +280,11 @@ Value encodings (FFADO 2.4.9 source and its own panel, `rme.py`):
 | `Sync_ref` | 0 Word, 1 ADAT 1, 2 ADAT 2, 3 SPDIF, 4 TCO |
 | `sync_status` | 2 bits per input (ADAT 1, ADAT 2, SPDIF, Word, TCO): 0 no lock, 1 lock, 2 sync |
 
+Note: FFADO also swaps input 1's front-path register bit (`INPUT_OPT0_A0`
+vs `INPUT_OPT0_A1`) when Speaker Emulation changes. A level jump was
+observed on a Fireface 800 after toggling it, cause not yet measured, so
+every instrument option change asks for confirmation.
+
 What FFADO does, which shapes the code:
 
 - **Every setter rewrites the unit's whole configuration** (three

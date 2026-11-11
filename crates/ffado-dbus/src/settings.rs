@@ -409,6 +409,8 @@ pub enum Risk {
     Louder,
     /// Audio may drop out, or the unit lose its clock.
     Clock,
+    /// The change rewrites input 1's analog path bits; the level can jump.
+    InputPath,
 }
 
 impl Risk {
@@ -421,6 +423,11 @@ impl Risk {
             Risk::Louder => {
                 "This can make the signal much louder, at the outputs and in headphones. Turn \
                  monitors and headphones down first."
+            }
+            Risk::InputPath => {
+                "This switches the analog path of input 1, and the level can jump, in either \
+                 direction (seen with Speaker Emulation on a Fireface 800). Turn monitors and \
+                 headphones down first."
             }
             Risk::Clock => {
                 "Changing the clock source can interrupt audio, and the unit loses its clock if \
@@ -535,6 +542,9 @@ impl Setting {
             | Setting::OutputLevel { .. }
             | Setting::Drive { on: true }
             | Setting::Limiter { on: false } => Some(Risk::Louder),
+            Setting::Drive { on: false }
+            | Setting::Limiter { on: true }
+            | Setting::SpeakerEmulation { .. } => Some(Risk::InputPath),
             Setting::Clock { .. } => Some(Risk::Clock),
             _ => None,
         }
@@ -877,6 +887,25 @@ mod tests {
         );
         assert_eq!(risk(Setting::Drive { on: true }), Some(Risk::Louder));
         assert_eq!(risk(Setting::Limiter { on: false }), Some(Risk::Louder));
+        // Changing any instrument option rewrites input 1's analog path.
+        // The fixture has drive off, limiter on and speaker emulation off.
+        assert_eq!(
+            risk(Setting::SpeakerEmulation { on: true }),
+            Some(Risk::InputPath)
+        );
+        let mut emulating = current;
+        emulating.instrument.speaker_emulation = true;
+        assert_eq!(
+            Setting::SpeakerEmulation { on: false }.risk(&emulating),
+            Some(Risk::InputPath)
+        );
+        let mut driven = current;
+        driven.instrument.drive = true;
+        assert_eq!(
+            Setting::Drive { on: false }.risk(&driven),
+            Some(Risk::InputPath)
+        );
+        assert_eq!(risk(Setting::Drive { on: false }), None);
         assert_eq!(
             risk(Setting::Clock {
                 source: ClockSource::Word
@@ -897,9 +926,6 @@ mod tests {
             }),
             None
         );
-        assert_eq!(risk(Setting::Drive { on: false }), None);
-        assert_eq!(risk(Setting::Limiter { on: true }), None);
-        assert_eq!(risk(Setting::SpeakerEmulation { on: true }), None);
         assert_eq!(
             risk(Setting::SpdifInput {
                 input: SpdifInput::Coax
