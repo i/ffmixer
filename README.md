@@ -1,55 +1,34 @@
 # ffmixer
 
-A mixer and device-settings app for RME Fireface interfaces on Linux,
-with a workflow inspired by RME's TotalMix FX, built on FFADO's
-`ffado-dbus-server`. RME does not offer TotalMix for Linux; this fills
-that gap. See [Supported hardware](#supported-hardware) for which models
-work today. See
-`docs/totalmix-fx-reference.md` for the target design and the
-hardware/FFADO findings, and `docs/setup.md` to get started.
+A mixer and settings app for RME Fireface interfaces on Linux, inspired
+by TotalMix FX. It controls the unit through [FFADO](https://ffado.org).
 
-> **Warning: use at your own risk.** ffmixer sends commands straight to
-> audio hardware. Misused, or through a bug, it could:
+> **Use at your own risk.** ffmixer sends commands to real audio
+> hardware. A mistake or a bug could damage microphones or other
+> equipment (48 V phantom power), speakers or headphones, or your
+> hearing (a sudden loud signal). It has only been tested on one
+> Fireface 800 on one Fedora machine. Turn monitors and headphones down
+> and disconnect anything delicate before you go live.
 >
-> - **damage microphones and other equipment** (48 V phantom power can
->   destroy ribbon microphones and some unbalanced or active sources);
-> - **damage speakers, headphones or your hearing** (a level, gain or
->   routing change can produce a sudden, very loud signal);
-> - leave the unit in an unexpected state, interrupt audio, or change
->   settings you did not mean to change.
+> There is no warranty and no liability; see sections 15 and 16 of the
+> [license](LICENSE).
 >
-> It has been tested on **one Fireface 800 on one Fedora machine**. Its
-> safeguards (confirmations, gain limits and ramping, read-back checks)
-> reduce the risk but do not remove it. Before going live: turn monitors
-> and headphones down, and disconnect anything that must not receive 48 V
-> or a loud signal.
->
-> The software is provided **as is, without warranty of any kind**. The
-> authors and contributors accept no liability for damage to hardware,
-> equipment, hearing, data or anything else; see sections 15 and 16 of
-> the [license](LICENSE).
->
-> **Not affiliated with or endorsed by RME.** RME, Fireface and TotalMix
-> are trademarks of RME Audio / Audio AG. They are used here only to say
-> which hardware this works with and what it is modelled on.
+> Not affiliated with or endorsed by RME. RME, Fireface and TotalMix are
+> trademarks of RME Audio.
 
 ## Screenshots
 
-![ffmixer with a Fireface connected: hardware inputs, software playback and hardware outputs, with the Control Strip on the right](docs/images/ffmixer.png)
+![ffmixer main window](docs/images/ffmixer.png)
 
-The three rows are the hardware inputs, the software playback channels
-and the hardware outputs. Click an output to edit what is sent to it
-(its submix). The Control Strip on the right has the **Go live** switch,
-mute and solo masters, and the view options.
+Hardware inputs, software playback and hardware outputs. Click an output
+to edit what is sent to it.
 
-<img src="docs/images/device-settings.png" alt="The Device Settings panel in the Control Strip" align="right" width="158">
+<img src="docs/images/device-settings.png" alt="Device Settings panel" align="right" width="158">
 
-**Device Settings** (Control Strip) is the Fireface Settings dialog:
-input source, line levels, 48 V phantom power, instrument options,
-digital formats, clock source, and live clock and input lock status.
-Here it is read-only (shown as the unit holds them); the controls
-become active when you go live, and risky changes ask for confirmation
-first.
+**Device Settings** has the options from RME's Fireface Settings dialog:
+input source, levels, 48 V, instrument options, digital formats and
+clock source, plus clock and input lock status. They can be changed once
+you go live.
 
 <br clear="right">
 
@@ -58,128 +37,86 @@ first.
 | Interface | Status |
 |---|---|
 | Fireface 800 | Supported. Tested on one unit. |
-| Fireface 400 | Not yet. FFADO supports it, but its channel counts, meter layout and settings differ from the 800 and are not implemented here. |
-| Other Fireface models (UCX, UFX and so on) | Not possible yet: FFADO's RME driver (2.4.9) does not support them. |
+| Fireface 400 | Not yet. FFADO supports it, but this app is written for the 800's channels, meters and settings. |
+| Other Fireface models | Not supported by FFADO. |
 
-The code is not model-neutral today: channel counts, the meter layout
-and the settings are written for the 800. Adding a model means defining
-those per model. Contributions and test reports are welcome.
+Contributions and test reports for other models are welcome.
 
-## Layout
+## Features
 
-| Path | Purpose |
-|---|---|
-| `apps/ffmixer` | Tauri v2 app: Svelte/TypeScript UI in `src/`, Rust shell in `src-tauri/`. |
-| `crates/mixer-core` | The TotalMix submix model: sends, pan/balance law, mute, solo, stereo pairs. Renders hardware crosspoints, imports them back, and plans safe (ramped) writes. No I/O. |
-| `crates/ffado-dbus` | Client for `ffado-dbus-server`. `FfadoReader` calls getters only (`READ_METHODS`); `writer::FfadoWriter` can set fader-matrix gains and the typed device `settings::Setting`s, and nothing else. |
-| `crates/fw-meter` | Read-only Fireface 800 level meters via `/dev/fw*`. Sends block reads only. |
-| `crates/ffado-probe` | Read-only: prints controls, non-silent mixer routes and a few seconds of meters. |
+- Submix mixer with pan or balance, mute, solo, stereo width, M/S and
+  phase, and meters with peak hold.
+- Hardware output volume, balance, mute and phase.
+- Device Settings: levels, 48 V, instrument options, digital formats and
+  clock source.
+- Rename channels by double-clicking the name. Names are saved in
+  `~/.config/ffmixer/names.json`.
+- Faders respond to dragging, the mouse wheel and the keyboard, never to
+  a single click.
+- Not yet: Talkback, No Trim, Loopback, mono outputs, and storing to or
+  reading from the unit's flash. These are shown but disabled.
 
-**The app starts read-only every time.** It adopts the mix FFADO
-reports, shows live hardware meters, and edits an in-memory copy; the
-Control Strip shows how many crosspoints differ from the unit. **Go
-live** re-reads the unit and from then on sends every edit, until
-**Stop sending** or an error. Edits made while read-only can be sent or
-discarded (**Reload from unit**). Without a unit it starts in demo mode
-with simulated meters.
+## How it works
 
-What going live can and can't touch:
+ffmixer starts **read-only**: it shows the unit's mix and live meters,
+and changes stay in the app until you press **Go live**. From then on
+changes are sent as you make them, until you press **Stop sending**.
+Without a unit or FFADO it starts in demo mode.
 
-- The three fader matrices (input, playback and output gains), and the
-  device settings in `settings::Setting` (input source, levels, 48V,
-  instrument options, digital formats, clock source). Flash, sample
-  rate, bandwidth limit and FFADO's own flags are unreachable: targets
-  are enums, not paths.
-- Device settings are applied at once, only while live. 48V on, level
-  changes, Drive on, Limiter off and clock source changes ask for
-  confirmation first (the backend asks again). The 48V prompt alone can
-  be switched off with a checkbox under Phantom Power (off by default,
-  remembered across restarts). Each write is read back
-  and checked; a mismatch stops sending.
-- Every gain is checked: whole number, at most +6 dB, crosspoint in
-  range. Increases ramp at 3 dB per 10 ms; decreases are immediate.
-- Going live is refused if FFADO has mute/invert flags set, since FFADO
-  would apply them to what we send.
-- Writes go to the running server's unique bus name, so a crashed
-  server is never silently restarted (a new server reloads the flash
-  mix). The app checks once a second and stops sending if it changed.
-- Nothing is stored to flash: the unit loses the mix on power-off, and
-  restarting `ffado-dbus-server` reloads the flash mix.
+Safeguards:
 
-## What the app does so far
-
-- Three rows (hardware inputs, software playback, hardware outputs) and
-  an optional 2 Row view.
-- Submix view: click anywhere on an output strip to edit what is sent
-  to it.
-- Per strip: pan/balance knob, mute, solo (current submix only), meter
-  with peak hold and over indicator, fader, numeric readouts, and a
-  Settings panel: Stereo, Width, MS Proc, Phase L/R (Phase for mono).
-- Output strips: volume, balance, mute, and a Settings panel with
-  Phase L/R. Mono outputs, Talkback, No Trim and Loopback are shown but
-  disabled until their features exist (Loopback: see the reference doc).
-- Double-click a strip's name (or press F2 on it) to rename it. Names are
-  display only and saved to `$XDG_CONFIG_HOME/ffmixer/names.json`; an
-  empty name restores the original.
-- Control Strip: mute/solo masters (clear, then restore), RMS readouts.
-- Device Settings (Control Strip): the Fireface Settings dialog's analog
-  and digital options and clock source, plus live clock and input lock
-  status. Store in Flash and Read Flash are shown but disabled; see the
-  reference doc.
-- Single clicks never change a level. Faders move by a relative drag
-  (no jump to the pointer; Shift for fine), wheel or arrow keys.
-  Double-click (or Home) sets 0 dB, except on the AN 1/2 output, which
-  feeds the main monitors.
-- Knob gestures follow the TotalMix manual: drag, wheel, Shift for
-  fine, double-click or Ctrl+click to centre, Shift/Shift+Ctrl+click
-  for hard left/right.
+- It can only write mixer gains and the settings in the panel. Flash and
+  the sample rate cannot be changed.
+- 48 V on, level changes, Drive on, Limiter off and clock changes ask
+  for confirmation first. The 48 V question can be switched off.
+- Gains are capped at +6 dB and fade in. Each setting is read back to
+  check that it was applied.
+- It stops sending if the FFADO server restarts, because a new server
+  reloads the saved mix onto the unit.
+- Nothing is saved to the unit's flash. The unit forgets the mix when it
+  is switched off.
 
 ## Setup
 
-See **[docs/setup.md](docs/setup.md)** for installation, the FireWire
-permissions, a first-run checklist and troubleshooting. In short:
+See [docs/setup.md](docs/setup.md) for installation, permissions and
+troubleshooting. You need:
 
-- A supported Fireface (see above) on FireWire, and FFADO 2.4.x (`ffado-dbus-server`,
-  started on demand by D-Bus). **The mixer and Device Settings need
-  that server; without it the app starts in demo mode.** The meters
-  read the unit directly and do not.
-- Read/write access to `/dev/fw*` (the `audio` group plus a udev rule).
-- Node.js 22+, Rust 1.85+, and WebKitGTK 4.1 development files. The
-  Tauri CLI comes from `npm install`; no `cargo-tauri` needed.
-
-The app sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless already set:
-WebKitGTK's DMA-BUF renderer crashed on Wayland here (NVIDIA).
-
-## Build and run
+- A supported Fireface on FireWire, and FFADO 2.4.x (`ffado-dbus-server`).
+  The mixer and Device Settings need it; the meters do not.
+- Read and write access to `/dev/fw*`.
+- To build from source: Node.js 22+, Rust 1.85+ and the WebKitGTK 4.1
+  development files.
 
 ```bash
 cd apps/ffmixer
 npm install
-npm run check                     # svelte-check + tsc
-npm run tauri dev                 # run the app
-npm run tauri -- build --no-bundle   # release binary, no installer
-
-cd ../..
-cargo test --workspace
-cargo test -p ffmixer -- --ignored   # go-live checks against the running server (reads only)
-cargo run -p ffado-probe -- 5     # 5 s of meters; 0 skips them
+npm run tauri dev                     # run the app
+npm run tauri -- build --no-bundle    # release binary
 ```
+
+## Project layout
+
+| Path | Purpose |
+|---|---|
+| `apps/ffmixer` | The app: Svelte UI, Rust backend (Tauri). |
+| `crates/mixer-core` | The mixer model and the rules for safe writes. |
+| `crates/ffado-dbus` | Client for `ffado-dbus-server`. |
+| `crates/fw-meter` | Reads level meters from the unit. |
+| `crates/ffado-probe` | Command-line tool that prints the unit's controls and meters. |
+
+`docs/totalmix-fx-reference.md` has the design notes and what was learned
+about the hardware and FFADO.
 
 ## License
 
-GPL-3.0-or-later; see [LICENSE](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 ## Credits
 
-- [FFADO](https://ffado.org) (GPL): `ffado-dbus-server` does all the
-  mixer and settings control. ffmixer talks to it over D-Bus and does not
-  include or link its code. Its source was the reference for the value
-  encodings recorded in the reference doc.
+- [FFADO](https://ffado.org): does the mixer and settings control. ffmixer
+  talks to it over D-Bus and does not include its code.
 - [snd-firewire-ctl-services](https://github.com/alsa-project/snd-firewire-ctl-services)
-  by Takashi Sakamoto (LGPL-3.0-or-later): documents the Fireface
-  level-meter layout. `crates/fw-meter` is an independent implementation
-  of that layout, not a copy of its code.
-- RME's *Fireface 800 User's Guide*, which describes the behaviour the
-  UI follows. The manual and screenshots are RME's and are not included
-  in this repository.
-
+  by Takashi Sakamoto: documents the meter format. `fw-meter` is a
+  separate implementation, not a copy.
+- RME's *Fireface 800 User's Guide*, which the UI follows. The manual is
+  RME's and is not included here.
