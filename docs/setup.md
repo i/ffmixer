@@ -38,6 +38,11 @@ Tauri may need more development packages (`openssl-devel`,
 `/dev/fw*` is root-only by default. Without access, FFADO fails with
 "No FireWire adapters found" and the app starts in demo mode.
 
+The `.deb` and `.rpm` packages already install the udev rule below
+(`/usr/lib/udev/rules.d/60-firewire-audio.rules`) and reload udev, so
+with a package you only need the `usermod` line. With the tarball or a
+source build, run all of it:
+
 ```bash
 sudo usermod -aG audio "$USER"
 echo 'SUBSYSTEM=="firewire", GROUP="audio", MODE="0660"' \
@@ -84,8 +89,8 @@ may be louder than you expect.
 ## 5. Get the app
 
 **Install a package (64-bit only).** Each release has a `.deb` and an
-`.rpm`. They install `/usr/bin/ffmixer`, an app menu entry and the icon,
-and pull in WebKitGTK 4.1 and GTK 3. FFADO is only recommended, so
+`.rpm`. They install `/usr/bin/ffmixer`, an app menu entry, the icon and
+the FireWire udev rule from step 2, and pull in WebKitGTK 4.1 and GTK 3. FFADO is only recommended, so
 install it yourself if your package manager skips it. The package
 checksums are in `ffmixer-*-installers.sha256`.
 

@@ -1,0 +1,3 @@
+# Lets members of the "audio" group use FireWire devices, which ffmixer
+# and FFADO need to control an RME Fireface.
+SUBSYSTEM=="firewire", GROUP="audio", MODE="0660"

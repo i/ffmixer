@@ -79,6 +79,21 @@ Safeguards:
 - Nothing is saved to the unit's flash. The unit forgets the mix when it
   is switched off.
 
+## Install
+
+Download the `.deb` or `.rpm` (64-bit) from the
+[latest release](https://github.com/i/ffmixer/releases/latest), then:
+
+```bash
+sudo apt install ./ffmixer_*_amd64.deb        # Debian, Ubuntu
+sudo dnf install ./ffmixer-*.x86_64.rpm       # Fedora
+sudo usermod -aG audio "$USER"                # then log out and back in
+```
+
+The package adds an app menu entry, the icon and a udev rule that lets
+the `audio` group use FireWire devices. You still need FFADO. 32-bit
+systems use the tarball instead. See the setup guide below.
+
 ## Setup
 
 See [docs/setup.md](docs/setup.md) for installation, permissions and

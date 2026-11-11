@@ -49,7 +49,11 @@
         ],
         "recommends": [
           "ffado-dbus-server"
-        ]
+        ],
+        "files": {
+          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules"
+        },
+        "postInstallScript": "packaging/postinst.sh"
       },
       "rpm": {
         "depends": [
@@ -58,7 +62,11 @@
         ],
         "recommends": [
           "ffado"
-        ]
+        ],
+        "files": {
+          "/usr/lib/udev/rules.d/60-firewire-audio.rules": "packaging/60-firewire-audio.rules"
+        },
+        "postInstallScript": "packaging/postinst.sh"
       }
     }
   }
