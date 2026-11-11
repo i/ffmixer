@@ -4,10 +4,15 @@
 //! Actions only change the in-memory model. While the session is
 //! **live** (see [`Session::go_live`]), the writer thread calls
 //! [`Session::sync`] every tick, which sends the difference between the
-//! model and the unit through a [`GainSink`], under the safety rules of
+//! model and the unit through a [`UnitLink`], under the safety rules of
 //! [`mixer_core::writes`]. Otherwise `pending_changes` reports how many
 //! crosspoints would change.
+//!
+//! Device settings (levels, phantom power, clock) are not part of the
+//! model: [`Action::SetDevice`] applies one at once, only while live, and
+//! only after confirmation if it is risky (see [`Setting::risk`]).
 
+use ffado_dbus::settings::{DeviceSettings, Setting};
 use mixer_core::writes::{self, Write};
 use mixer_core::{Crosspoints, Mixer, SourceKind, law};
 use serde::Deserialize;
@@ -21,11 +26,19 @@ const LIVE_STATUS: &str = "Live: changes are sent to the unit";
 const WRITES_PER_TICK: usize = 64;
 
 /// Where accepted writes go: `ffado-dbus-server`, or a fake in tests.
-pub trait GainSink: Send {
+pub trait UnitLink: Send {
     fn set_gain(
         &self,
         write: &Write,
     ) -> Result<(), String>;
+
+    /// Sends one device setting, reads the settings back, and returns
+    /// them if they show exactly that change.
+    fn apply_setting(
+        &self,
+        setting: &Setting,
+        current: &DeviceSettings,
+    ) -> Result<DeviceSettings, String>;
 
     /// False once the server we bound to has been replaced or is gone.
     fn server_unchanged(&self) -> Result<bool, String>;
@@ -51,8 +64,11 @@ pub struct Session {
     pub warnings: Vec<String>,
     /// User channel names (display only).
     pub names: ChannelNames,
+    /// The unit's device settings as FFADO holds them; `None` if they
+    /// could not be read.
+    pub device_settings: Option<DeviceSettings>,
     /// Present while live: every model change is sent to the unit.
-    link: Option<Box<dyn GainSink>>,
+    link: Option<Box<dyn UnitLink>>,
     /// Strips whose mute/solo the master buttons switched off, so the
     /// next click can restore them (manual §25.5).
     mute_memory: Vec<(SourceKind, usize)>,
@@ -130,6 +146,12 @@ pub enum Action {
     },
     ToggleMuteMaster,
     ToggleSoloMaster,
+    /// Changes a device setting on the unit now. Needs `confirmed` if
+    /// [`Setting::risk`] says so.
+    SetDevice {
+        setting: Setting,
+        confirmed: bool,
+    },
 }
 
 impl Session {
@@ -142,6 +164,7 @@ impl Session {
             hardware: None,
             warnings: Vec::new(),
             names: ChannelNames::default(),
+            device_settings: None,
             link: None,
             mute_memory: Vec::new(),
             solo_memory: Vec::new(),
@@ -174,6 +197,21 @@ impl Session {
         self.solo_memory.clear();
     }
 
+    /// Adopts freshly read device settings, keeping what FFADO cannot
+    /// report (Mic 10 phantom) from the previous ones.
+    pub fn adopt_device_settings(
+        &mut self,
+        fresh: Option<DeviceSettings>,
+    ) {
+        self.device_settings = match (fresh, self.device_settings) {
+            (Some(mut fresh), Some(previous)) => {
+                fresh.keep_unreadable_from(&previous);
+                Some(fresh)
+            }
+            (fresh, _) => fresh,
+        };
+    }
+
     pub fn enter_demo(
         &mut self,
         reason: String,
@@ -184,6 +222,7 @@ impl Session {
         self.device = "Demo".to_owned();
         self.mixer = Mixer::default();
         self.hardware = None;
+        self.device_settings = None;
         self.warnings.clear();
     }
 
@@ -195,7 +234,7 @@ impl Session {
     /// made elsewhere since loading are not mistaken for ours.
     pub fn go_live(
         &mut self,
-        link: Box<dyn GainSink>,
+        link: Box<dyn UnitLink>,
         unit: Crosspoints,
     ) -> Result<(), String> {
         if self.mode != Mode::Hardware {
@@ -318,8 +357,47 @@ impl Session {
                 toggle_master(mixer, &mut self.solo_memory, |source| &mut source.soloed);
                 Ok(())
             }
+            Action::SetDevice { setting, confirmed } => {
+                return self.change_device_setting(setting, confirmed);
+            }
         };
         result.map_err(|e| e.to_string())
+    }
+
+    /// The warning to show before `setting` may be applied, if any.
+    pub fn setting_warning(
+        &self,
+        setting: &Setting,
+    ) -> Option<&'static str> {
+        let current = self.device_settings.as_ref()?;
+        setting.risk(current).map(|risk| risk.warning())
+    }
+
+    /// Sends one device setting. Any failure drops out of live mode: the
+    /// unit may not be in the state we think it is.
+    fn change_device_setting(
+        &mut self,
+        setting: Setting,
+        confirmed: bool,
+    ) -> Result<(), String> {
+        let (Some(link), Some(current)) = (&self.link, &self.device_settings) else {
+            return Err("Go live to change device settings".to_owned());
+        };
+        if let Some(risk) = setting.risk(current)
+            && !confirmed
+        {
+            return Err(format!("needs confirmation: {}", risk.warning()));
+        }
+        match link.apply_setting(&setting, current) {
+            Ok(applied) => {
+                self.device_settings = Some(applied);
+                Ok(())
+            }
+            Err(e) => {
+                self.go_offline(Some(format!("Stopped sending: {e}")));
+                Err(e)
+            }
+        }
     }
 }
 
@@ -440,16 +518,33 @@ mod tests {
         }
     }
 
+    use ffado_dbus::settings::{Mic, OutputLevel};
     use std::sync::{Arc, Mutex};
 
     /// Records writes; fails once `fail_after` writes have succeeded.
     struct FakeSink {
         sent: Arc<Mutex<Vec<Write>>>,
+        settings_sent: Arc<Mutex<Vec<Setting>>>,
         fail_after: usize,
+        fail_settings: bool,
         server_unchanged: bool,
     }
 
-    impl GainSink for FakeSink {
+    impl UnitLink for FakeSink {
+        fn apply_setting(
+            &self,
+            setting: &Setting,
+            current: &DeviceSettings,
+        ) -> Result<DeviceSettings, String> {
+            if self.fail_settings {
+                return Err("bus error".to_owned());
+            }
+            self.settings_sent.lock().unwrap().push(*setting);
+            let mut after = *current;
+            setting.apply_to(&mut after);
+            Ok(after)
+        }
+
         fn set_gain(
             &self,
             write: &Write,
@@ -477,11 +572,127 @@ mod tests {
         let sent = Arc::new(Mutex::new(Vec::new()));
         let sink = FakeSink {
             sent: sent.clone(),
+            settings_sent: Arc::default(),
             fail_after,
+            fail_settings: false,
             server_unchanged,
         };
         session.go_live(Box::new(sink), unit).unwrap();
         (session, sent)
+    }
+
+    /// A live session that also holds device settings (all raw zeros:
+    /// front inputs, -10 dBV out, internal clock, everything off).
+    fn live_with_device_settings(fail_settings: bool) -> (Session, Arc<Mutex<Vec<Setting>>>) {
+        let unit = Mixer::default().render();
+        let mut session = Session::loading();
+        session.adopt_hardware("guid".to_owned(), unit.clone());
+        session.device_settings = Some(DeviceSettings::read_with(|_| Ok(0)).unwrap());
+        let settings_sent = Arc::new(Mutex::new(Vec::new()));
+        let sink = FakeSink {
+            sent: Arc::default(),
+            settings_sent: settings_sent.clone(),
+            fail_after: usize::MAX,
+            fail_settings,
+            server_unchanged: true,
+        };
+        session.go_live(Box::new(sink), unit).unwrap();
+        (session, settings_sent)
+    }
+
+    fn device(setting: Setting) -> Action {
+        Action::SetDevice {
+            setting,
+            confirmed: false,
+        }
+    }
+
+    fn confirmed(setting: Setting) -> Action {
+        Action::SetDevice {
+            setting,
+            confirmed: true,
+        }
+    }
+
+    #[test]
+    fn device_settings_need_a_live_session() {
+        let mut session = Session::loading();
+        session.adopt_hardware("guid".to_owned(), Mixer::default().render());
+        session.device_settings = Some(DeviceSettings::read_with(|_| Ok(0)).unwrap());
+        let error = session
+            .apply(device(Setting::Emphasis { on: true }))
+            .unwrap_err();
+        assert!(error.contains("Go live"), "{error}");
+    }
+
+    #[test]
+    fn safe_device_setting_is_applied_at_once() {
+        let (mut session, sent) = live_with_device_settings(false);
+        session
+            .apply(device(Setting::Emphasis { on: true }))
+            .unwrap();
+        assert_eq!(*sent.lock().unwrap(), [Setting::Emphasis { on: true }]);
+        assert!(session.device_settings.unwrap().emphasis);
+        assert!(session.is_live());
+    }
+
+    #[test]
+    fn risky_device_setting_needs_confirmation() {
+        let (mut session, sent) = live_with_device_settings(false);
+        let setting = Setting::OutputLevel {
+            level: OutputLevel::HiGain,
+        };
+        assert!(session.setting_warning(&setting).is_some());
+        let error = session.apply(device(setting)).unwrap_err();
+        assert!(error.starts_with("needs confirmation"), "{error}");
+        assert!(sent.lock().unwrap().is_empty());
+
+        session.apply(confirmed(setting)).unwrap();
+        assert_eq!(*sent.lock().unwrap(), [setting]);
+        assert_eq!(
+            session.device_settings.unwrap().output_level,
+            OutputLevel::HiGain
+        );
+    }
+
+    #[test]
+    fn unchanged_risky_setting_needs_no_confirmation() {
+        let (mut session, _) = live_with_device_settings(false);
+        let same = Setting::OutputLevel {
+            level: OutputLevel::Minus10dBV,
+        };
+        assert!(session.setting_warning(&same).is_none());
+        session.apply(device(same)).unwrap();
+    }
+
+    #[test]
+    fn failed_device_write_stops_sending() {
+        let (mut session, _) = live_with_device_settings(true);
+        let error = session
+            .apply(device(Setting::Emphasis { on: true }))
+            .unwrap_err();
+        assert_eq!(error, "bus error");
+        assert!(!session.is_live());
+        assert!(session.status.starts_with("Stopped sending"));
+        assert!(!session.device_settings.unwrap().emphasis);
+    }
+
+    #[test]
+    fn device_action_deserializes_from_ui_json() {
+        let action: Action = serde_json::from_str(
+            r#"{"type":"setDevice","setting":{"control":"phantom","mic":"mic7","on":true},"confirmed":false}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            action,
+            Action::SetDevice {
+                setting: Setting::Phantom {
+                    mic: Mic::Mic7,
+                    on: true
+                },
+                confirmed: false
+            }
+        ));
     }
 
     #[test]
@@ -546,7 +757,9 @@ mod tests {
         let mut session = ready();
         let sink = FakeSink {
             sent: Arc::default(),
+            settings_sent: Arc::default(),
             fail_after: 0,
+            fail_settings: false,
             server_unchanged: true,
         };
         assert!(

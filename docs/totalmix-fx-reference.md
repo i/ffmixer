@@ -226,7 +226,8 @@ Right-click an output: **Clear Submix**, **Copy Submix**, **Paste Submix**.
 ### 9. Device settings (the separate "Fireface Settings" app; manual p13–16)
 
 On Windows/macOS this is a separate program. We fold it into our app as
-its own page.
+a panel in the Control Strip (`DeviceSettings.svelte`); the items we do
+not offer are listed under *FF800 ↔ FFADO mapping* below.
 
 - **General:** buffer size and bandwidth (driver-side; not ours),
   Word clock single speed, ADAT2 as ADAT or SPDIF, SPDIF
@@ -251,14 +252,73 @@ Known `ffado-dbus-server` paths (from the RME support in FFADO 2.4.9):
 | Output volume | `/Mixer/OutputFaders`, `/Mixer/OutputMutes` |
 | 48V | `/Control/Phantom`. Bitmask: value bit *n*, plus enable bit *16+n* |
 | Input select 1/7/8 | `/Control/Chan1_source`, `/Control/Chan7_source`, `/Control/Chan8_source` |
-| Line In / Out / Phones reference level | `/Control/Input_level`, `/Control/Output_level`, `/Control/Phones_level` |
-| Clock | `/Control/Clock_mode`, `/Control/sysclock_mode`, `/Control/sysclock_freq`, `/Generic/ClockSelect` |
-| Store/read flash | `/Control/Flash_control` |
+| Line In / Out reference level | `/Control/Input_level`, `/Control/Output_level` (`/Control/Phones_level` exists but FFADO does not use it on the FF800) |
+| Instrument options (input 1) | `/Control/Chan1_instr_opts`, a bitmap |
+| SPDIF / ADAT2 | `/Control/SPDIF_input_mode`, `SPDIF_output_optical`, `SPDIF_output_pro`, `SPDIF_output_emphasis` |
+| Clock source | `/Control/Clock_mode` and `/Control/Sync_ref` |
+| Clock and lock status (read-only) | `sysclock_freq`, `sysclock_mode`, `autosync_src`, `autosync_freq`, `spdif_freq`, `sync_status`, `TCO_present` |
+| Store/read flash | `/Control/Flash_control` (not used, see below) |
 
 All paths sit under `/org/ffado/Control/DeviceManager/<GUID>/`. The
-FF800 on this machine has GUID `000a35004aa780e6`. The level, clock and
-flash paths were confirmed in the D-Bus tree; their value encodings are
-not yet checked.
+FF800 on this machine has GUID `000a35004aa780e6`.
+
+### Device settings: values and FFADO's behaviour
+
+Value encodings (FFADO 2.4.9 source and its own panel, `rme.py`):
+
+| Control | Values |
+|---|---|
+| `Input_level` | 0 Lo Gain, 1 −10 dBV, 2 +4 dBu |
+| `Output_level` | 0 −10 dBV, 1 +4 dBu, 2 Hi Gain |
+| `Chan1/7/8_source` | 0 Front, 1 Rear, 2 Front + Rear |
+| `Chan1_instr_opts` | bits 0x02 Speaker Emulation, 0x04 Drive, 0x08 Limiter |
+| `Phantom` | bit 0–3 = Mic 7–10; bits 16–19 select which bits to change |
+| `SPDIF_input_mode` | 0 coaxial, 1 optical |
+| `SPDIF_output_optical` | 0 ADAT on ADAT 2, 1 SPDIF on ADAT 2 |
+| `SPDIF_output_pro` | 0 consumer, 1 professional |
+| `Clock_mode` | 0 master (internal), 1 autosync |
+| `Sync_ref` | 0 Word, 1 ADAT 1, 2 ADAT 2, 3 SPDIF, 4 TCO |
+| `sync_status` | 2 bits per input (ADAT 1, ADAT 2, SPDIF, Word, TCO): 0 no lock, 1 lock, 2 sync |
+
+What FFADO does, which shapes the code:
+
+- **Every setter rewrites the unit's whole configuration** (three
+  config registers, `set_hardware_params`) from FFADO's own copy of the
+  settings. That copy came from flash when the server started and was
+  sent to the unit then, so it matches the unit unless something else
+  changed it since.
+- **`setValue` over D-Bus echoes its argument whatever happened.** A
+  write is only trusted after reading the settings back and comparing
+  (`confirm_applied`).
+- **The phantom getter skips Mic 10.** Its state is unknown until we
+  set it; the UI shows it dashed and the first click switches it off.
+- **The limiter only takes effect with input 1 on Front.** Otherwise the
+  unit keeps it on, so the button is disabled.
+- FFADO reports 44.1 kHz on the SPDIF input as 41000; we correct it.
+- On this unit FFADO's copy has input 1's limiter **off** with input 1
+  on Front. That came from FFADO's startup, not from totalnix.
+
+Not offered, and why:
+
+| Dialog item | Reason |
+|---|---|
+| Buffer size, Errors, WDM devices | Windows driver settings |
+| Bandwidth | FFADO's own streaming option; this setup streams through the kernel driver |
+| Sample rate, Pitch | Set by the audio software (PipeWire); FFADO exposes no safe control |
+| Word clock single speed, TMS | Not exposed (FFADO hardwires single speed) |
+| **Store in Flash / Read Flash** | See below |
+
+**Flash is disabled on purpose.** *Store* erases the settings sector
+and rewrites it from FFADO's copy with no verification, including fields
+FFADO cannot read back (sample rate, bandwidth limit). *Read* loads
+flash into FFADO's copy **without** sending it to the unit, so the UI
+and the unit would disagree until the next write, which would then apply
+the flash settings (including 48V) all at once.
+
+Checked on this unit: a write of the current value (S/PDIF emphasis)
+went through, was confirmed by read-back, and left the clock at 48 kHz
+master (`hardware.rs`, `identical_value_write_round_trips`, ignored by
+default).
 
 ### Meters (not in FFADO)
 

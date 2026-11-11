@@ -1,12 +1,13 @@
 //! The app's connection to `ffado-dbus-server`: reading the unit's mix,
 //! and the write link used while live.
 
+use ffado_dbus::settings::{DeviceSettings, Setting, confirm_applied};
 use ffado_dbus::writer::{FaderMatrix, FfadoWriter, GainWrite};
 use ffado_dbus::{FfadoReader, Result as DbusResult};
 use mixer_core::writes::{Matrix, Write};
 use mixer_core::{CHANNELS, Crosspoints};
 
-use crate::session::GainSink;
+use crate::session::UnitLink;
 
 /// FFADO's own per-crosspoint flags. It applies them to every value we
 /// write (mute forces 0, invert flips the sign), so they must all be
@@ -22,6 +23,8 @@ const FLAG_MATRICES: [&str; 5] = [
 pub struct LoadedDevice {
     pub guid: String,
     pub crosspoints: Crosspoints,
+    /// `None` if FFADO's settings could not be read; the mix still loads.
+    pub settings: Option<DeviceSettings>,
 }
 
 pub fn load_first_device() -> Result<LoadedDevice, String> {
@@ -33,7 +36,12 @@ pub fn load_first_device() -> Result<LoadedDevice, String> {
         .next()
         .ok_or_else(|| "ffado-dbus-server reports no devices".to_owned())?;
     let crosspoints = read_crosspoints(&reader, &guid)?;
-    Ok(LoadedDevice { guid, crosspoints })
+    let settings = reader.device_settings(&guid).ok();
+    Ok(LoadedDevice {
+        guid,
+        crosspoints,
+        settings,
+    })
 }
 
 /// Fresh read of the unit's mix, e.g. for "Reload from unit".
@@ -41,12 +49,26 @@ pub fn read_mix(guid: &str) -> Result<Crosspoints, String> {
     read_crosspoints(&connect_reader()?, guid)
 }
 
+/// Fresh read of the unit's device settings, if FFADO reports them.
+pub fn read_device_settings(guid: &str) -> Option<DeviceSettings> {
+    connect_reader().ok()?.device_settings(guid).ok()
+}
+
+/// What going live starts from: the link, plus a fresh read of the unit.
+pub struct OpenedLink {
+    pub link: FfadoLink,
+    pub crosspoints: Crosspoints,
+    pub settings: Option<DeviceSettings>,
+}
+
 /// Binds a writer to the running server and reads the unit's mix through
 /// it, after checking FFADO's flags are clear.
-pub fn open_link(guid: &str) -> Result<(FfadoLink, Crosspoints), String> {
+pub fn open_link(guid: &str) -> Result<OpenedLink, String> {
     let writer =
         FfadoWriter::connect(guid).map_err(|e| format!("cannot reach ffado-dbus-server ({e})"))?;
-    let reader = connect_reader()?;
+    // Bound to the running server, so a restarted one cannot answer.
+    let reader = FfadoReader::connect_running()
+        .map_err(|e| format!("cannot reach ffado-dbus-server ({e})"))?;
 
     let mut flagged = 0;
     for control in FLAG_MATRICES {
@@ -68,18 +90,45 @@ pub fn open_link(guid: &str) -> Result<(FfadoLink, Crosspoints), String> {
     }
 
     let crosspoints = read_crosspoints(&reader, guid)?;
-    let link = FfadoLink { writer };
+    let settings = reader.device_settings(guid).ok();
+    let link = FfadoLink {
+        writer,
+        reader,
+        guid: guid.to_owned(),
+    };
     if !link.server_unchanged()? {
         return Err("ffado-dbus-server restarted while connecting; try again".to_owned());
     }
-    Ok((link, crosspoints))
+    Ok(OpenedLink {
+        link,
+        crosspoints,
+        settings,
+    })
 }
 
 pub struct FfadoLink {
     writer: FfadoWriter,
+    /// Reads settings back after each write to confirm it.
+    reader: FfadoReader,
+    guid: String,
 }
 
-impl GainSink for FfadoLink {
+impl UnitLink for FfadoLink {
+    fn apply_setting(
+        &self,
+        setting: &Setting,
+        current: &DeviceSettings,
+    ) -> Result<DeviceSettings, String> {
+        self.writer
+            .set_setting(setting, current)
+            .map_err(|e| e.to_string())?;
+        let after = self
+            .reader
+            .device_settings(&self.guid)
+            .map_err(|e| format!("cannot read the settings back ({e})"))?;
+        confirm_applied(setting, current, after).map_err(|e| e.to_string())
+    }
+
     fn set_gain(
         &self,
         write: &Write,
@@ -145,8 +194,49 @@ mod tests {
     #[ignore]
     fn open_link_against_running_server() {
         let device = load_first_device().unwrap();
-        let (link, unit) = open_link(&device.guid).unwrap();
-        assert!(link.server_unchanged().unwrap());
-        assert_eq!(unit, device.crosspoints);
+        let opened = open_link(&device.guid).unwrap();
+        assert!(opened.link.server_unchanged().unwrap());
+        assert_eq!(opened.crosspoints, device.crosspoints);
+        assert_eq!(opened.settings, device.settings);
+    }
+
+    /// Reads the settings and clock status through a reader bound to the
+    /// running server. Reads only.
+    #[test]
+    #[ignore]
+    fn reads_settings_and_status_from_running_server() {
+        let device = load_first_device().unwrap();
+        let reader = FfadoReader::connect_running().unwrap();
+        let settings = reader.device_settings(&device.guid).unwrap();
+        let status = reader.clock_status(&device.guid).unwrap();
+        println!("{settings:#?}\n{status:#?}");
+        assert_eq!(settings.phantom[3], None);
+        assert!(status.sample_rate >= 32000);
+    }
+
+    /// **Writes to the unit**, but changes nothing: sends the setting's
+    /// current value (S/PDIF emphasis) back, so FFADO rewrites the same
+    /// configuration registers. Checks the write is read back and
+    /// confirmed, and that the clock is undisturbed.
+    /// `cargo test -p totalnix -- --ignored identical_value_write`.
+    #[test]
+    #[ignore]
+    fn identical_value_write_round_trips() {
+        let device = load_first_device().unwrap();
+        let before = device.settings.unwrap();
+        let reader = FfadoReader::connect_running().unwrap();
+        let clock_before = reader.clock_status(&device.guid).unwrap();
+
+        let opened = open_link(&device.guid).unwrap();
+        let same = Setting::Emphasis {
+            on: before.emphasis,
+        };
+        assert_eq!(same.risk(&before), None);
+        let after = opened.link.apply_setting(&same, &before).unwrap();
+
+        assert_eq!(after, before);
+        let clock_after = reader.clock_status(&device.guid).unwrap();
+        assert_eq!(clock_after.sample_rate, clock_before.sample_rate);
+        assert_eq!(clock_after.master, clock_before.master);
     }
 }

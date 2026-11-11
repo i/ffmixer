@@ -3,8 +3,11 @@ name = "ffado-dbus"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
-description = "Read-only client for ffado-dbus-server"
+description = "Client for ffado-dbus-server: reads, plus a whitelisted writer"
 
 [dependencies]
 serde.workspace = true
 zbus.workspace = true
+
+[dev-dependencies]
+serde_json = "1"

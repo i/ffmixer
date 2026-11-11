@@ -9,6 +9,7 @@ mod channel_names;
 mod hardware;
 mod meters;
 mod session;
+mod status;
 mod view;
 mod writer;
 
@@ -18,6 +19,7 @@ use std::thread;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use channel_names::{ChannelNames, NameRow};
+use ffado_dbus::settings::Setting;
 use session::{Action, Session};
 use view::ViewState;
 
@@ -40,6 +42,17 @@ fn apply(
     Ok(ViewState::from_session(&session))
 }
 
+/// The warning the user must confirm before `setting` is applied, if
+/// any. The same rule is enforced again when the setting is applied.
+#[tauri::command]
+fn setting_warning(
+    setting: Setting,
+    session: State<'_, SharedSession>,
+) -> Option<String> {
+    let session = session.lock().expect("session lock");
+    session.setting_warning(&setting).map(str::to_owned)
+}
+
 /// Starts or stops sending to the unit. Going live re-reads the unit
 /// first, which takes about a second.
 #[tauri::command(async)]
@@ -53,9 +66,10 @@ fn set_live(
         return Ok(ViewState::from_session(&session));
     }
     let guid = session.lock().expect("session lock").device.clone();
-    let (link, unit) = hardware::open_link(&guid)?;
+    let opened = hardware::open_link(&guid)?;
     let mut session = session.lock().expect("session lock");
-    session.go_live(Box::new(link), unit)?;
+    session.go_live(Box::new(opened.link), opened.crosspoints)?;
+    session.adopt_device_settings(opened.settings);
     Ok(ViewState::from_session(&session))
 }
 
@@ -70,8 +84,10 @@ fn reload_from_unit(session: State<'_, SharedSession>) -> Result<ViewState, Stri
         session.device.clone()
     };
     let unit = hardware::read_mix(&guid)?;
+    let settings = hardware::read_device_settings(&guid);
     let mut session = session.lock().expect("session lock");
     session.reload(unit);
+    session.adopt_device_settings(settings);
     Ok(ViewState::from_session(&session))
 }
 
@@ -106,7 +122,10 @@ fn load_session(
         let state = {
             let mut session = session.lock().expect("session lock");
             match loaded {
-                Ok(device) => session.adopt_hardware(device.guid, device.crosspoints),
+                Ok(device) => {
+                    session.adopt_hardware(device.guid, device.crosspoints);
+                    session.adopt_device_settings(device.settings);
+                }
                 Err(reason) => session.enter_demo(reason),
             }
             ViewState::from_session(&session)
@@ -137,6 +156,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_state,
             apply,
+            setting_warning,
             set_live,
             reload_from_unit,
             rename
@@ -145,6 +165,7 @@ fn main() {
             let handle = app.app_handle().clone();
             load_session(handle.clone(), session.clone());
             writer::spawn(handle.clone(), session.clone());
+            status::spawn(handle.clone(), session.clone());
             meters::spawn(handle, session);
             Ok(())
         })

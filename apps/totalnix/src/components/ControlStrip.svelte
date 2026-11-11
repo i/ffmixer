@@ -6,6 +6,7 @@
   import { reloadFromUnit, send, session, setLive } from '../lib/backend.svelte'
   import { viewOptions } from '../lib/viewOptions.svelte'
   import type { ViewState } from '../lib/types'
+  import DeviceSettings from './DeviceSettings.svelte'
 
   interface Props {
     view: ViewState
@@ -116,6 +117,10 @@
       <button class="toggle wide" aria-pressed={viewOptions.twoRow} onclick={() => (viewOptions.twoRow = !viewOptions.twoRow)}>2 Row</button>
     </div>
   </section>
+
+  {#if view.mode === 'hardware'}
+    <DeviceSettings settings={view.deviceSettings} live={view.live} />
+  {/if}
 
   {#if view.warnings.length > 0}
     <section class="panel warnings" aria-label="Import warnings">

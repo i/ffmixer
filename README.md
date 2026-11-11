@@ -10,7 +10,7 @@ design and the hardware/FFADO findings.
 |---|---|
 | `apps/totalnix` | Tauri v2 app: Svelte/TypeScript UI in `src/`, Rust shell in `src-tauri/`. |
 | `crates/mixer-core` | The TotalMix submix model: sends, pan/balance law, mute, solo, stereo pairs. Renders hardware crosspoints, imports them back, and plans safe (ramped) writes. No I/O. |
-| `crates/ffado-dbus` | Client for `ffado-dbus-server`. `FfadoReader` calls getters only (`READ_METHODS`); `writer::FfadoWriter` can set fader-matrix gains and nothing else. |
+| `crates/ffado-dbus` | Client for `ffado-dbus-server`. `FfadoReader` calls getters only (`READ_METHODS`); `writer::FfadoWriter` can set fader-matrix gains and the typed device `settings::Setting`s, and nothing else. |
 | `crates/fw-meter` | Read-only Fireface 800 level meters via `/dev/fw*`. Sends block reads only. |
 | `crates/ffado-probe` | Read-only: prints controls, non-silent mixer routes and a few seconds of meters. |
 
@@ -24,8 +24,15 @@ with simulated meters.
 
 What going live can and can't touch:
 
-- Only the three fader matrices (input, playback and output gains).
-  Flash, 48V, levels, clock and FFADO's own flags are unreachable.
+- The three fader matrices (input, playback and output gains), and the
+  device settings in `settings::Setting` (input source, levels, 48V,
+  instrument options, digital formats, clock source). Flash, sample
+  rate, bandwidth limit and FFADO's own flags are unreachable: targets
+  are enums, not paths.
+- Device settings are applied at once, only while live. 48V on, level
+  changes, Drive on, Limiter off and clock source changes ask for
+  confirmation first (the backend asks again). Each write is read back
+  and checked; a mismatch stops sending.
 - Every gain is checked: whole number, at most +6 dB, crosspoint in
   range. Increases ramp at 3 dB per 10 ms; decreases are immediate.
 - Going live is refused if FFADO has mute/invert flags set, since FFADO
@@ -52,6 +59,10 @@ What going live can and can't touch:
   display only and saved to `$XDG_CONFIG_HOME/totalnix/names.json`; an
   empty name restores the original.
 - Control Strip: mute/solo masters (clear, then restore), RMS readouts.
+- Device Settings (Control Strip): the Fireface Settings dialog's analog
+  and digital options and clock source, plus live clock and input lock
+  status. Store in Flash and Read Flash are shown but disabled; see the
+  reference doc.
 - Single clicks never change a level. Faders move by a relative drag
   (no jump to the pointer; Shift for fine), wheel or arrow keys.
   Double-click (or Home) sets 0 dB, except on the AN 1/2 output, which

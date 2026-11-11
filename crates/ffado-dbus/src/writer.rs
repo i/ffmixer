@@ -1,20 +1,21 @@
 //! The only code in totalnix that changes anything on the unit.
 //!
-//! It can write exactly one thing: a gain in one of the three fader
-//! matrices ([`FaderMatrix`]). Flash, phantom power, levels, clock and
-//! FFADO's mute/invert flags are unreachable: the target is an enum, not
-//! a path, and every value is range-checked before it leaves the process.
+//! It can write two kinds of thing: a gain in one of the three fader
+//! matrices ([`FaderMatrix`]), and a typed [`Setting`] (analog and
+//! digital options, clock source). Flash, bandwidth, sample rate and
+//! FFADO's mute/invert flags are unreachable: the targets are enums, not
+//! paths, and every value is range-checked before it leaves the process.
 //!
 //! Calls go to the server's *unique* bus name, captured on connect. If
 //! `ffado-dbus-server` exits, writes fail instead of D-Bus starting a new
 //! server, which would reload the flash mix onto the unit behind our back.
 
 use zbus::blocking::Connection;
-use zbus::blocking::fdo::DBusProxy;
-use zbus::names::{BusName, OwnedUniqueName};
+use zbus::names::OwnedUniqueName;
 use zbus::zvariant::OwnedObjectPath;
 
-use crate::{Error, GAIN_MAX, IFACE_MATRIX, Result, SERVICE, device_path};
+use crate::settings::{ControlWrite, DeviceSettings, Setting, WRITABLE_CONTROLS};
+use crate::{Error, GAIN_MAX, IFACE_DISCRETE, IFACE_MATRIX, Result, current_owner, device_path};
 
 /// FF800 mixer size: 28 sources into 28 output channels.
 pub const CHANNELS: usize = 28;
@@ -132,15 +133,50 @@ impl FfadoWriter {
         }
         Ok(())
     }
-}
 
-fn current_owner(connection: &Connection) -> Result<Option<OwnedUniqueName>> {
-    let proxy = DBusProxy::new(connection)?;
-    let name = BusName::try_from(SERVICE).map_err(zbus::Error::from)?;
-    match proxy.get_name_owner(name) {
-        Ok(owner) => Ok(Some(owner)),
-        Err(zbus::fdo::Error::NameHasNoOwner(_)) => Ok(None),
-        Err(e) => Err(zbus::Error::from(e).into()),
+    /// Sends one setting change. FFADO answers `setValue` with the value
+    /// it was given whatever happened, so the caller must read the
+    /// settings back to learn the outcome (see
+    /// [`crate::settings::confirm_applied`]).
+    pub fn set_setting(
+        &self,
+        setting: &Setting,
+        current: &DeviceSettings,
+    ) -> Result<()> {
+        setting.validate(current)?;
+        for write in setting.writes(current) {
+            self.set_discrete(&write)?;
+        }
+        Ok(())
+    }
+
+    fn set_discrete(
+        &self,
+        write: &ControlWrite,
+    ) -> Result<()> {
+        if !WRITABLE_CONTROLS.contains(&write.control) {
+            return Err(Error::Rejected(format!(
+                "{} is not a writable setting",
+                write.control
+            )));
+        }
+        let path = device_path(&self.guid, write.control);
+        let object_path =
+            OwnedObjectPath::try_from(path.as_str()).map_err(|_| Error::InvalidPath(path))?;
+        let reply = self.connection.call_method(
+            Some(self.owner.as_str()),
+            object_path,
+            Some(IFACE_DISCRETE),
+            WRITE_METHOD,
+            &(write.value,),
+        )?;
+        let echoed: i32 = reply.body().deserialize()?;
+        if echoed != write.value {
+            return Err(Error::Rejected(format!(
+                "ffado-dbus-server answered {echoed} to {write:?}"
+            )));
+        }
+        Ok(())
     }
 }
 

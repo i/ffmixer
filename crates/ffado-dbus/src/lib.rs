@@ -2,13 +2,18 @@
 //!
 //! [`FfadoReader`] exposes **only getters**: the only D-Bus methods it
 //! calls are the read methods listed in [`READ_METHODS`]. All writing
-//! lives in [`writer`], which can change fader gains and nothing else.
+//! lives in [`writer`], which can change fader gains and the typed
+//! [`settings::Setting`]s (analog and digital options, clock source) and
+//! nothing else: no flash, sample rate or bandwidth controls.
 
+pub mod settings;
 pub mod writer;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use zbus::blocking::Connection;
+use zbus::blocking::fdo::DBusProxy;
+use zbus::names::{BusName, OwnedUniqueName};
 use zbus::zvariant::{DynamicType, OwnedObjectPath, Type};
 
 pub(crate) const SERVICE: &str = "org.ffado.Control";
@@ -54,6 +59,8 @@ pub enum Error {
     Rejected(String),
     /// The `ffado-dbus-server` the writer bound to is no longer running.
     ServerGone,
+    /// FFADO reported a value this crate does not understand.
+    Unexpected(String),
 }
 
 impl std::fmt::Display for Error {
@@ -67,6 +74,7 @@ impl std::fmt::Display for Error {
             Error::InvalidPath(p) => write!(f, "invalid object path `{p}`"),
             Error::Rejected(why) => write!(f, "write rejected: {why}"),
             Error::ServerGone => write!(f, "ffado-dbus-server is not running"),
+            Error::Unexpected(what) => write!(f, "unexpected value from FFADO: {what}"),
         }
     }
 }
@@ -93,13 +101,30 @@ pub struct MatrixSnapshot {
 
 pub struct FfadoReader {
     connection: Connection,
+    /// Bus name calls go to: the service name (which D-Bus will start a
+    /// server for) or the unique name of one running server.
+    destination: String,
 }
 
 impl FfadoReader {
-    /// Connects to `ffado-dbus-server` on the session bus.
+    /// Connects to `ffado-dbus-server` on the session bus. D-Bus starts
+    /// a server if none is running.
     pub fn connect() -> Result<Self> {
         Ok(Self {
             connection: Connection::session()?,
+            destination: SERVICE.to_owned(),
+        })
+    }
+
+    /// Binds to the server that is running now and never starts one. If
+    /// that server exits, reads fail. Use this for anything repeated: a
+    /// new server would reload the flash mix onto the unit.
+    pub fn connect_running() -> Result<Self> {
+        let connection = Connection::session()?;
+        let owner = current_owner(&connection)?.ok_or(Error::ServerGone)?;
+        Ok(Self {
+            connection,
+            destination: owner.to_string(),
         })
     }
 
@@ -159,6 +184,22 @@ impl FfadoReader {
         })
     }
 
+    /// Reads all of the unit's settings (see [`settings::DeviceSettings`]).
+    pub fn device_settings(
+        &self,
+        guid: &str,
+    ) -> Result<settings::DeviceSettings> {
+        settings::DeviceSettings::read_with(|control| self.discrete(guid, control))
+    }
+
+    /// Reads the clock and input lock status (see [`settings::ClockStatus`]).
+    pub fn clock_status(
+        &self,
+        guid: &str,
+    ) -> Result<settings::ClockStatus> {
+        settings::ClockStatus::read_with(|control| self.discrete(guid, control))
+    }
+
     fn call<B, R>(
         &self,
         path: &str,
@@ -176,13 +217,24 @@ impl FfadoReader {
         let object_path =
             OwnedObjectPath::try_from(path).map_err(|_| Error::InvalidPath(path.to_owned()))?;
         let reply = self.connection.call_method(
-            Some(SERVICE),
+            Some(self.destination.as_str()),
             object_path,
             Some(interface),
             method,
             body,
         )?;
         Ok(reply.body().deserialize()?)
+    }
+}
+
+/// The unique bus name of the running server, if any.
+pub(crate) fn current_owner(connection: &Connection) -> Result<Option<OwnedUniqueName>> {
+    let proxy = DBusProxy::new(connection)?;
+    let name = BusName::try_from(SERVICE).map_err(zbus::Error::from)?;
+    match proxy.get_name_owner(name) {
+        Ok(owner) => Ok(Some(owner)),
+        Err(zbus::fdo::Error::NameHasNoOwner(_)) => Ok(None),
+        Err(e) => Err(zbus::Error::from(e).into()),
     }
 }
 

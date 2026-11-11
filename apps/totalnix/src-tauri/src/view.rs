@@ -1,5 +1,6 @@
 //! What the UI receives: a flat, display-ready snapshot of the session.
 
+use ffado_dbus::settings::DeviceSettings;
 use mixer_core::{OUTPUT_PAIRS, SourceKind, law, names};
 use serde::Serialize;
 
@@ -22,6 +23,8 @@ pub struct ViewState {
     pub pending_changes: Option<usize>,
     /// True while edits are being sent to the unit.
     pub live: bool,
+    /// The unit's device settings; `None` if FFADO would not report them.
+    pub device_settings: Option<DeviceSettings>,
     pub warnings: Vec<String>,
 }
 
@@ -154,6 +157,7 @@ impl ViewState {
             any_soloed: mixer.any_soloed(),
             pending_changes: session.pending_changes(),
             live: session.is_live(),
+            device_settings: session.device_settings,
             warnings: session.warnings.clone(),
         }
     }

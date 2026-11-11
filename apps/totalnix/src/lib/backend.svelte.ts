@@ -7,7 +7,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
-import type { Action, NameRow, ViewState } from './types'
+import type { Action, ClockStatus, NameRow, Setting, ViewState } from './types'
 
 export const session = $state<{ view: ViewState | null; error: string }>({
   view: null,
@@ -68,9 +68,15 @@ async function flush(): Promise<void> {
   }
 }
 
+/** Latest clock and lock status from the unit; null if unavailable. */
+export const deviceStatus = $state<{ value: ClockStatus | null }>({ value: null })
+
 export async function connect(): Promise<void> {
   await listen<ViewState>('state', (event) => {
     session.view = event.payload
+  })
+  await listen<ClockStatus | null>('device-status', (event) => {
+    deviceStatus.value = event.payload
   })
   session.view = await invoke<ViewState>('get_state')
 }
@@ -104,4 +110,17 @@ export function reloadFromUnit(): Promise<void> {
  */
 export function rename(row: NameRow, index: number, name: string | null): Promise<void> {
   return command('rename', { row, index, name })
+}
+
+/**
+ * Asks what the user must confirm before `setting` is applied. Null means
+ * it can be applied at once. The backend enforces this again.
+ */
+export function settingWarning(setting: Setting): Promise<string | null> {
+  return invoke<string | null>('setting_warning', { setting })
+}
+
+/** Changes a device setting on the unit now (only while live). */
+export function setDevice(setting: Setting, confirmed: boolean): Promise<void> {
+  return command('apply', { action: { type: 'setDevice', setting, confirmed } })
 }

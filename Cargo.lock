@@ -967,6 +967,7 @@ name = "ffado-dbus"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "zbus",
 ]
 
