@@ -16,6 +16,21 @@ by TotalMix FX. It controls the unit through [FFADO](https://ffado.org).
 > Not affiliated with or endorsed by RME. RME, Fireface and TotalMix are
 > trademarks of RME Audio.
 
+## Install
+
+Download the `.deb` or `.rpm` (64-bit) from the
+[latest release](https://github.com/i/ffmixer/releases/latest), then:
+
+```bash
+sudo apt install ./ffmixer_*_amd64.deb        # Debian, Ubuntu
+sudo dnf install ./ffmixer-*.x86_64.rpm       # Fedora
+sudo usermod -aG audio "$USER"                # then log out and back in
+```
+
+The package adds an app menu entry, the icon and a udev rule that lets
+the `audio` group use FireWire devices. You still need FFADO. 32-bit
+systems use the tarball instead. See [docs/setup.md](docs/setup.md).
+
 ## Screenshots
 
 ![ffmixer main window](docs/images/ffmixer.png)
@@ -23,13 +38,16 @@ by TotalMix FX. It controls the unit through [FFADO](https://ffado.org).
 Hardware inputs, software playback and hardware outputs. Click an output
 to edit what is sent to it.
 
-<img src="docs/images/device-settings.png" alt="Device Settings panel" align="right" width="158">
-
 **Device Settings** has the options from RME's Fireface Settings dialog:
 input source, levels, 48 V, instrument options, digital formats and
 clock source, plus clock and input lock status.
 
-<br clear="right">
+<details>
+<summary>Show the Device Settings panel</summary>
+
+<img src="docs/images/device-settings.png" alt="Device Settings panel" width="158">
+
+</details>
 
 ## Supported hardware
 
@@ -78,21 +96,6 @@ Safeguards:
   reloads the saved mix onto the unit.
 - Nothing is saved to the unit's flash. The unit forgets the mix when it
   is switched off.
-
-## Install
-
-Download the `.deb` or `.rpm` (64-bit) from the
-[latest release](https://github.com/i/ffmixer/releases/latest), then:
-
-```bash
-sudo apt install ./ffmixer_*_amd64.deb        # Debian, Ubuntu
-sudo dnf install ./ffmixer-*.x86_64.rpm       # Fedora
-sudo usermod -aG audio "$USER"                # then log out and back in
-```
-
-The package adds an app menu entry, the icon and a udev rule that lets
-the `audio` group use FireWire devices. You still need FFADO. 32-bit
-systems use the tarball instead. See the setup guide below.
 
 ## Setup
 
