@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import { reconnect, send, session } from '../lib/backend.svelte'
+  import { preferences, setHideWarnings } from '../lib/preferences.svelte'
   import { viewOptions } from '../lib/viewOptions.svelte'
   import type { ViewState } from '../lib/types'
   import DeviceSettings from './DeviceSettings.svelte'
@@ -115,6 +116,15 @@
       </ul>
     </section>
   {/if}
+
+  <label class="hide-warnings" title="Apply 48 V, level, drive, limiter and clock changes without asking first">
+    <input
+      type="checkbox"
+      checked={preferences.hideWarnings}
+      onchange={(event) => setHideWarnings(event.currentTarget.checked)}
+    />
+    Hide warnings
+  </label>
 </aside>
 
 <style>
@@ -129,6 +139,14 @@
     border-left: 1px solid #111;
     overflow-y: auto;
     box-sizing: border-box;
+  }
+  .hide-warnings {
+    margin-top: auto;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    font-size: 10px;
+    color: var(--text-dim);
   }
   .device {
     background: var(--panel);

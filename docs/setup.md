@@ -130,7 +130,9 @@ cd apps/ffmixer && npm run check
    lost, press **Reconnect**: it reads the unit again, and changes that
    were not sent are discarded.
 4. **Device Settings** can only be changed while connected. Risky
-   changes ask for confirmation first.
+   changes ask for confirmation first. Tick **Hide warnings** at the
+   bottom of the sidebar to skip these questions once you trust your
+   setup (off by default, remembered across restarts).
 
 Channel names are saved in `~/.config/ffmixer/names.json`. Nothing is
 saved to the unit's flash, so it forgets what ffmixer sent when it is

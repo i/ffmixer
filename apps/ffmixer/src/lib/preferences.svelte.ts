@@ -1,13 +1,16 @@
 // Preferences that outlast a restart, kept in the webview's local storage.
 
-const SKIP_PHANTOM_WARNING = 'ffmixer.skipPhantomWarning'
+const HIDE_WARNINGS = 'ffmixer.hideWarnings'
 
 export const preferences = $state({
-  /** Switch 48 V on without the confirmation prompt. Off by default. */
-  skipPhantomWarning: localStorage.getItem(SKIP_PHANTOM_WARNING) === '1',
+  /**
+   * Apply risky device changes (48 V on, levels, drive, limiter, clock)
+   * without the confirmation prompt. Off by default.
+   */
+  hideWarnings: localStorage.getItem(HIDE_WARNINGS) === '1',
 })
 
-export function setSkipPhantomWarning(value: boolean): void {
-  preferences.skipPhantomWarning = value
-  localStorage.setItem(SKIP_PHANTOM_WARNING, value ? '1' : '0')
+export function setHideWarnings(value: boolean): void {
+  preferences.hideWarnings = value
+  localStorage.setItem(HIDE_WARNINGS, value ? '1' : '0')
 }
