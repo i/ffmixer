@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
   import { deviceStatus, session, setDevice, settingWarning } from '../lib/backend.svelte'
+  import { preferences, setSkipPhantomWarning } from '../lib/preferences.svelte'
   import {
     ADAT2_OUTPUTS,
     CLOCK_SOURCES,
@@ -88,9 +89,13 @@
     pending = null
     busy = true
     try {
-      const warning = await settingWarning(setting)
+      // Only the 48 V prompt can be switched off; the backend still
+      // accepts the change because we say it is confirmed.
+      const skipPrompt =
+        preferences.skipPhantomWarning && setting.control === 'phantom' && setting.on
+      const warning = skipPrompt ? null : await settingWarning(setting)
       if (warning) pending = { setting, description, warning }
-      else await setDevice(setting, false)
+      else await setDevice(setting, skipPrompt)
     } catch (error) {
       session.error = String(error)
     } finally {
@@ -215,6 +220,14 @@
           Dashed: state unknown, FFADO cannot report it. Click switches it off.
         </p>
       {/if}
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={preferences.skipPhantomWarning}
+          onchange={(event) => setSkipPhantomWarning(event.currentTarget.checked)}
+        />
+        Don't ask before switching 48 V on
+      </label>
 
       <h3>Instrument (Input 1)</h3>
       <div class="grid">
@@ -457,6 +470,17 @@
   .toggle.phantom[aria-pressed='mixed'] {
     color: var(--solo);
     border-style: dashed;
+  }
+  .check {
+    display: flex;
+    gap: 4px;
+    align-items: flex-start;
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--text-dim);
+  }
+  .check input {
+    margin: 1px 0 0;
   }
   .readout {
     display: grid;

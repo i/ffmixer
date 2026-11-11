@@ -31,7 +31,9 @@ What going live can and can't touch:
   are enums, not paths.
 - Device settings are applied at once, only while live. 48V on, level
   changes, Drive on, Limiter off and clock source changes ask for
-  confirmation first (the backend asks again). Each write is read back
+  confirmation first (the backend asks again). The 48V prompt alone can
+  be switched off with a checkbox under Phantom Power (off by default,
+  remembered across restarts). Each write is read back
   and checked; a mismatch stops sending.
 - Every gain is checked: whole number, at most +6 dB, crosspoint in
   range. Increases ramp at 3 dB per 10 ms; decreases are immediate.
