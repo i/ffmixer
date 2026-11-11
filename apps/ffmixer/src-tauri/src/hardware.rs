@@ -85,7 +85,7 @@ pub fn open_link(guid: &str) -> Result<OpenedLink, String> {
     if flagged > 0 {
         return Err(format!(
             "FFADO has {flagged} mute/invert flags set (perhaps from ffado-mixer). They would \
-             change what totalnix sends. Clear them in ffado-mixer, or restart ffado-dbus-server."
+             change what ffmixer sends. Clear them in ffado-mixer, or restart ffado-dbus-server."
         ));
     }
 
@@ -189,7 +189,7 @@ mod tests {
     use super::*;
 
     /// Needs a running `ffado-dbus-server` and unit. Reads only:
-    /// `cargo test -p totalnix -- --ignored`.
+    /// `cargo test -p ffmixer -- --ignored`.
     #[test]
     #[ignore]
     fn open_link_against_running_server() {
@@ -218,7 +218,7 @@ mod tests {
     /// current value (S/PDIF emphasis) back, so FFADO rewrites the same
     /// configuration registers. Checks the write is read back and
     /// confirmed, and that the clock is undisturbed.
-    /// `cargo test -p totalnix -- --ignored identical_value_write`.
+    /// `cargo test -p ffmixer -- --ignored identical_value_write`.
     #[test]
     #[ignore]
     fn identical_value_write_round_trips() {

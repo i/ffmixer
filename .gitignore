@@ -2,6 +2,6 @@
 # RME manuals and screenshots: copyrighted, local reference only
 /research
 node_modules/
-/apps/totalnix/dist/
-/apps/totalnix/src-tauri/gen/
+/apps/ffmixer/dist/
+/apps/ffmixer/src-tauri/gen/
 /ss

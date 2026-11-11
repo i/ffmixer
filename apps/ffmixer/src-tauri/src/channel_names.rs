@@ -1,7 +1,7 @@
 //! User channel names (double-click a strip's name, manual §25.3).
 //!
 //! Display only: nothing is sent to the unit. Saved to
-//! `$XDG_CONFIG_HOME/totalnix/names.json` (or `~/.config/...`). Source
+//! `$XDG_CONFIG_HOME/ffmixer/names.json` (or `~/.config/...`). Source
 //! strips are keyed by their first channel, outputs by stereo pair, so a
 //! stereo strip split into two mono strips keeps its name on the left.
 
@@ -142,7 +142,7 @@ fn file_path() -> Option<PathBuf> {
         .filter(|dir| !dir.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(config.join("totalnix").join("names.json"))
+    Some(config.join("ffmixer").join("names.json"))
 }
 
 #[cfg(test)]
@@ -194,8 +194,8 @@ mod tests {
 
     #[test]
     fn saves_and_loads_a_file() {
-        let dir = std::env::temp_dir().join(format!("totalnix-names-{}", std::process::id()));
-        let path = dir.join("totalnix").join("names.json");
+        let dir = std::env::temp_dir().join(format!("ffmixer-names-{}", std::process::id()));
+        let path = dir.join("ffmixer").join("names.json");
         let mut names = ChannelNames::default();
         names.set(NameRow::Input, 0, Some("Kick")).unwrap();
         names.save_to(&path).unwrap();
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn missing_or_corrupt_file_gives_no_names() {
-        let dir = std::env::temp_dir().join(format!("totalnix-corrupt-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ffmixer-corrupt-{}", std::process::id()));
         let path = dir.join("names.json");
         assert_eq!(ChannelNames::load_from(&path), ChannelNames::default());
         fs::create_dir_all(&dir).unwrap();

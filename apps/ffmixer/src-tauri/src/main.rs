@@ -1,4 +1,4 @@
-//! totalnix: a TotalMix FX-style mixer for the RME Fireface 800.
+//! ffmixer: a TotalMix FX-style mixer for the RME Fireface 800.
 //!
 //! It adopts the mix `ffado-dbus-server` reports and shows live hardware
 //! meters. It starts read-only every time; after the user goes live, the

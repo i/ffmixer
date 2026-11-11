@@ -980,6 +980,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ffmixer"
+version = "0.1.0"
+dependencies = [
+ "ffado-dbus",
+ "fw-meter",
+ "mixer-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "field-offset"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3923,19 +3936,6 @@ name = "toml_writer"
 version = "1.2.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
-
-[[package]]
-name = "totalnix"
-version = "0.1.0"
-dependencies = [
- "ffado-dbus",
- "fw-meter",
- "mixer-core",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
-]
 
 [[package]]
 name = "tower"

@@ -1,4 +1,4 @@
-# totalnix
+# ffmixer
 
 A TotalMix FX-style mixer for the RME Fireface 800 on Linux, built on
 `ffado-dbus-server`. See `docs/totalmix-fx-reference.md` for the target
@@ -8,7 +8,7 @@ design and the hardware/FFADO findings.
 
 | Path | Purpose |
 |---|---|
-| `apps/totalnix` | Tauri v2 app: Svelte/TypeScript UI in `src/`, Rust shell in `src-tauri/`. |
+| `apps/ffmixer` | Tauri v2 app: Svelte/TypeScript UI in `src/`, Rust shell in `src-tauri/`. |
 | `crates/mixer-core` | The TotalMix submix model: sends, pan/balance law, mute, solo, stereo pairs. Renders hardware crosspoints, imports them back, and plans safe (ramped) writes. No I/O. |
 | `crates/ffado-dbus` | Client for `ffado-dbus-server`. `FfadoReader` calls getters only (`READ_METHODS`); `writer::FfadoWriter` can set fader-matrix gains and the typed device `settings::Setting`s, and nothing else. |
 | `crates/fw-meter` | Read-only Fireface 800 level meters via `/dev/fw*`. Sends block reads only. |
@@ -58,7 +58,7 @@ What going live can and can't touch:
   Phase L/R. Mono outputs, Talkback, No Trim and Loopback are shown but
   disabled until their features exist (Loopback: see the reference doc).
 - Double-click a strip's name (or press F2 on it) to rename it. Names are
-  display only and saved to `$XDG_CONFIG_HOME/totalnix/names.json`; an
+  display only and saved to `$XDG_CONFIG_HOME/ffmixer/names.json`; an
   empty name restores the original.
 - Control Strip: mute/solo masters (clear, then restore), RMS readouts.
 - Device Settings (Control Strip): the Fireface Settings dialog's analog
@@ -92,7 +92,7 @@ WebKitGTK's DMA-BUF renderer crashed on Wayland here (NVIDIA).
 ## Build and run
 
 ```bash
-cd apps/totalnix
+cd apps/ffmixer
 npm install
 npm run check                     # svelte-check + tsc
 npm run tauri dev                 # run the app
@@ -100,6 +100,6 @@ npm run tauri -- build --no-bundle   # release binary, no installer
 
 cd ../..
 cargo test --workspace
-cargo test -p totalnix -- --ignored   # go-live checks against the running server (reads only)
+cargo test -p ffmixer -- --ignored   # go-live checks against the running server (reads only)
 cargo run -p ffado-probe -- 5     # 5 s of meters; 0 skips them
 ```

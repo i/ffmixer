@@ -94,7 +94,7 @@ Settings panel:
   Loopback sends that output to the recording software in place of that
   channel's hardware input.
 
-How totalnix implements these on the FF800 (all in `mixer-core`):
+How ffmixer implements these on the FF800 (all in `mixer-core`):
 
 - **Phase L/R (sources):** negative crosspoint values; the hardware
   inverts per crosspoint.
@@ -104,7 +104,7 @@ How totalnix implements these on the FF800 (all in `mixer-core`):
   sides (1 keeps, 0 sums to mono, −1 swaps).
 - **Phase L/R (outputs):** no Linux driver exposes an output inverter
   (FFADO has `InputInverts`/`PlaybackInverts` only), and whether the
-  output volume register accepts negative values is untested. totalnix
+  output volume register accepts negative values is untested. ffmixer
   inverts every crosspoint feeding that output channel instead, which
   sounds identical.
 - **Not yet:** mono outputs, Talkback and No Trim (need Control Room and
@@ -144,7 +144,7 @@ Gestures:
 | Shift+click narrow or settings button | Apply to every channel to the right |
 | Right-click any channel | Open Channel Layout with that channel preselected |
 
-**totalnix departs from this on purpose: single clicks never change a
+**ffmixer departs from this on purpose: single clicks never change a
 level.** A misclick that jumps a route from −∞ to 0 dB can damage
 hearing or equipment. Faders move by a relative drag (after a few pixels
 of travel), the wheel, or the keyboard; clicking the track or thumb and
@@ -296,7 +296,7 @@ What FFADO does, which shapes the code:
   unit keeps it on, so the button is disabled.
 - FFADO reports 44.1 kHz on the SPDIF input as 41000; we correct it.
 - On this unit FFADO's copy has input 1's limiter **off** with input 1
-  on Front. That came from FFADO's startup, not from totalnix.
+  on Front. That came from FFADO's startup, not from ffmixer.
 
 Not offered, and why:
 
@@ -412,7 +412,7 @@ avoids 0 on inverted routes. **Not reproduced on this FF800:** with a
 −20 dBFS tone on playback 1 and Line out 1 sampled every 5 ms for 600
 ms after each write, none of +g→−g, −g→+g, 0→−1, −1→0, 0→−g or −g→0
 peaked above the steady level. Halving Line out 1's volume dropped its
-meter by exactly 6.0 dB. totalnix therefore writes sign changes
+meter by exactly 6.0 dB. ffmixer therefore writes sign changes
 directly.
 
 ## Where state lives
@@ -421,7 +421,7 @@ directly.
 |---|---|
 | Crosspoint gains, mutes, inverts, output volume, 48V, input select, levels, clock | Hardware, through FFADO |
 | Pan, stereo pairs, width, M/S, trim, solo, cue, groups, Control Room assignments, talkback/dim/recall | `mixer-core`, which writes the resulting gains to the hardware |
-| Names, snapshots, layout presets, undo history, workspaces, preferences | App files under `$XDG_CONFIG_HOME/totalnix/` |
+| Names, snapshots, layout presets, undo history, workspaces, preferences | App files under `$XDG_CONFIG_HOME/ffmixer/` |
 
 ## Build phases
 

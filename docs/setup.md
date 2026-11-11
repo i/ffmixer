@@ -1,6 +1,6 @@
 # Setup guide
 
-totalnix is a mixer for the **RME Fireface 800** on Linux. It talks to
+ffmixer is a mixer for the **RME Fireface 800** on Linux. It talks to
 the unit through FFADO's `ffado-dbus-server` (mixer and settings) and
 reads the level meters directly from the FireWire device. This guide
 takes you from a fresh machine to a running app.
@@ -87,14 +87,14 @@ not for audio streaming.
 - Turn monitors and headphones down. The saved mix may be louder than
   you expect.
 
-totalnix itself starts **read-only** every time: it shows the unit's mix
+ffmixer itself starts **read-only** every time: it shows the unit's mix
 and meters, and sends nothing until you press **Go live**.
 
 ## 6. Build and run
 
 ```bash
-git clone <repository-url> totalnix
-cd totalnix/apps/totalnix
+git clone <repository-url> ffmixer
+cd ffmixer/apps/ffmixer
 npm install
 npm run tauri dev                 # development: hot reload
 ```
@@ -105,7 +105,7 @@ A release build (no installer package yet):
 npm run tauri -- build --no-bundle
 ```
 
-The binary is `target/release/totalnix` in the repository, or under
+The binary is `target/release/ffmixer` in the repository, or under
 `$CARGO_TARGET_DIR/release/` if you set that. It needs
 `ffado-dbus-server` available on the session bus when it runs.
 
@@ -113,7 +113,7 @@ To check the code itself:
 
 ```bash
 cargo test --workspace
-cd apps/totalnix && npm run check
+cd apps/ffmixer && npm run check
 ```
 
 ## 7. First run
@@ -134,11 +134,11 @@ What is stored where:
 
 | Data | Location |
 |---|---|
-| Channel names | `$XDG_CONFIG_HOME/totalnix/names.json` (`~/.config/totalnix/`) |
+| Channel names | `$XDG_CONFIG_HOME/ffmixer/names.json` (`~/.config/ffmixer/`) |
 | "Don't ask before switching 48 V on" | the app's local storage |
 | Mixer state | the unit only; **nothing is saved to its flash** |
 
-The unit forgets what totalnix sent when it is powered off, and
+The unit forgets what ffmixer sent when it is powered off, and
 restarting `ffado-dbus-server` reloads the flash mix.
 
 ## Troubleshooting
@@ -158,5 +158,5 @@ restarting `ffado-dbus-server` reloads the flash mix.
 ## Using the unit with other FFADO tools
 
 `ffado-mixer` talks to the same server, and changes made there can
-overwrite what totalnix sent (and the reverse). Use one at a time while
+overwrite what ffmixer sent (and the reverse). Use one at a time while
 editing.

@@ -1,4 +1,4 @@
-//! The only code in totalnix that changes anything on the unit.
+//! The only code in ffmixer that changes anything on the unit.
 //!
 //! It can write two kinds of thing: a gain in one of the three fader
 //! matrices ([`FaderMatrix`]), and a typed [`Setting`] (analog and

@@ -1,6 +1,6 @@
 // Preferences that outlast a restart, kept in the webview's local storage.
 
-const SKIP_PHANTOM_WARNING = 'totalnix.skipPhantomWarning'
+const SKIP_PHANTOM_WARNING = 'ffmixer.skipPhantomWarning'
 
 export const preferences = $state({
   /** Switch 48 V on without the confirmation prompt. Off by default. */
