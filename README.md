@@ -1,8 +1,10 @@
 # ffmixer
 
-A mixer for the RME Fireface 800 on Linux, with a workflow inspired by
-RME's TotalMix FX, built on FFADO's `ffado-dbus-server`. RME does not
-offer TotalMix for Linux; this fills that gap. See
+A mixer and device-settings app for RME Fireface interfaces on Linux,
+with a workflow inspired by RME's TotalMix FX, built on FFADO's
+`ffado-dbus-server`. RME does not offer TotalMix for Linux; this fills
+that gap. See [Supported hardware](#supported-hardware) for which models
+work today. See
 `docs/totalmix-fx-reference.md` for the target design and the
 hardware/FFADO findings, and `docs/setup.md` to get started.
 
@@ -33,7 +35,7 @@ hardware/FFADO findings, and `docs/setup.md` to get started.
 
 ## Screenshots
 
-![ffmixer showing a Fireface 800: hardware inputs, software playback and hardware outputs, with the Control Strip on the right](docs/images/ffmixer.png)
+![ffmixer with a Fireface connected: hardware inputs, software playback and hardware outputs, with the Control Strip on the right](docs/images/ffmixer.png)
 
 The three rows are the hardware inputs, the software playback channels
 and the hardware outputs. Click an output to edit what is sent to it
@@ -50,6 +52,18 @@ become active when you go live, and risky changes ask for confirmation
 first.
 
 <br clear="right">
+
+## Supported hardware
+
+| Interface | Status |
+|---|---|
+| Fireface 800 | Supported. Tested on one unit. |
+| Fireface 400 | Not yet. FFADO supports it, but its channel counts, meter layout and settings differ from the 800 and are not implemented here. |
+| Other Fireface models (UCX, UFX and so on) | Not possible yet: FFADO's RME driver (2.4.9) does not support them. |
+
+The code is not model-neutral today: channel counts, the meter layout
+and the settings are written for the 800. Adding a model means defining
+those per model. Contributions and test reports are welcome.
 
 ## Layout
 
@@ -125,7 +139,7 @@ What going live can and can't touch:
 See **[docs/setup.md](docs/setup.md)** for installation, the FireWire
 permissions, a first-run checklist and troubleshooting. In short:
 
-- A Fireface 800 on FireWire, and FFADO 2.4.x (`ffado-dbus-server`,
+- A supported Fireface (see above) on FireWire, and FFADO 2.4.x (`ffado-dbus-server`,
   started on demand by D-Bus). **The mixer and Device Settings need
   that server; without it the app starts in demo mode.** The meters
   read the unit directly and do not.

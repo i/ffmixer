@@ -9,7 +9,8 @@
 > and headphones down and disconnect delicate equipment before you go
 > live for the first time.
 
-ffmixer is a mixer for the **RME Fireface 800** on Linux. It talks to
+ffmixer is a mixer for **RME Fireface** interfaces on Linux. Only the
+Fireface 800 is supported so far (see the README). It talks to
 the unit through FFADO's `ffado-dbus-server` (mixer and settings) and
 reads the level meters directly from the FireWire device. This guide
 takes you from a fresh machine to a running app.
@@ -20,7 +21,7 @@ work; package names below for them are from memory, so check yours.
 
 ## 1. What you need
 
-- A Fireface 800 connected over FireWire. The computer needs a
+- A supported Fireface (currently the 800) connected over FireWire. The computer needs a
   FireWire (OHCI) port; the kernel module is `firewire_ohci`. A
   Thunderbolt or ExpressCard adapter works if it shows up as one.
 - Check the unit is seen: `ls /dev/fw*` lists `fw0` (the controller) and
