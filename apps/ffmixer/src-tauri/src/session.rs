@@ -2,11 +2,12 @@
 //! actions the UI may apply to it.
 //!
 //! Actions only change the in-memory model. While the session is
-//! **live** (see [`Session::go_live`]), the writer thread calls
+//! **live** (connected to the unit, see [`Session::go_live`]), the writer
+//! thread calls
 //! [`Session::sync`] every tick, which sends the difference between the
 //! model and the unit through a [`UnitLink`], under the safety rules of
-//! [`mixer_core::writes`]. Otherwise `pending_changes` reports how many
-//! crosspoints would change.
+//! [`mixer_core::writes`]. If the connection is lost or refused,
+//! `pending_changes` reports how many crosspoints are not sent.
 //!
 //! Device settings (levels, phantom power, clock) are not part of the
 //! model: [`Action::SetDevice`] applies one at once, only while live, and
@@ -19,7 +20,7 @@ use serde::Deserialize;
 
 use crate::channel_names::ChannelNames;
 
-const READ_ONLY_STATUS: &str = "Read-only: changes are not sent to the unit";
+const READ_ONLY_STATUS: &str = "Not sending: changes stay in the app";
 const LIVE_STATUS: &str = "Live: changes are sent to the unit";
 
 /// Gains sent per tick at most; the rest follow on the next tick.
@@ -288,7 +289,7 @@ impl Session {
             Ok(true) => {}
             Ok(false) => self.go_offline(Some(
                 "Stopped sending: ffado-dbus-server restarted and reloaded the flash mix. \
-                 Reload from unit, or go live to send this mix again."
+                 Press Reconnect to read the unit again."
                     .to_owned(),
             )),
             Err(e) => self.go_offline(Some(format!("Stopped sending: {e}"))),
@@ -381,7 +382,7 @@ impl Session {
         confirmed: bool,
     ) -> Result<(), String> {
         let (Some(link), Some(current)) = (&self.link, &self.device_settings) else {
-            return Err("Go live to change device settings".to_owned());
+            return Err("Not connected to the unit".to_owned());
         };
         if let Some(risk) = setting.risk(current)
             && !confirmed
@@ -622,7 +623,7 @@ mod tests {
         let error = session
             .apply(device(Setting::Emphasis { on: true }))
             .unwrap_err();
-        assert!(error.contains("Go live"), "{error}");
+        assert!(error.contains("Not connected"), "{error}");
     }
 
     #[test]

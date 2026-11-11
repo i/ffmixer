@@ -94,14 +94,9 @@ async function command(
   }
 }
 
-/** Starts or stops sending edits to the unit. */
-export function setLive(value: boolean): Promise<void> {
-  return command('set_live', { value })
-}
-
-/** Discards edits and re-reads the unit's mix. */
-export function reloadFromUnit(): Promise<void> {
-  return command('reload_from_unit')
+/** Reads the unit again and starts sending, discarding unsent edits. */
+export function reconnect(): Promise<void> {
+  return command('reconnect')
 }
 
 /**

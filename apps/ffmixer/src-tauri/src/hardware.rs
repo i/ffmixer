@@ -11,7 +11,7 @@ use crate::session::UnitLink;
 
 /// FFADO's own per-crosspoint flags. It applies them to every value we
 /// write (mute forces 0, invert flips the sign), so they must all be
-/// clear before going live.
+/// clear before connecting.
 const FLAG_MATRICES: [&str; 5] = [
     "Mixer/InputMutes",
     "Mixer/PlaybackMutes",
@@ -44,17 +44,7 @@ pub fn load_first_device() -> Result<LoadedDevice, String> {
     })
 }
 
-/// Fresh read of the unit's mix, e.g. for "Reload from unit".
-pub fn read_mix(guid: &str) -> Result<Crosspoints, String> {
-    read_crosspoints(&connect_reader()?, guid)
-}
-
-/// Fresh read of the unit's device settings, if FFADO reports them.
-pub fn read_device_settings(guid: &str) -> Option<DeviceSettings> {
-    connect_reader().ok()?.device_settings(guid).ok()
-}
-
-/// What going live starts from: the link, plus a fresh read of the unit.
+/// What connecting starts from: the link, plus a fresh read of the unit.
 pub struct OpenedLink {
     pub link: FfadoLink,
     pub crosspoints: Crosspoints,

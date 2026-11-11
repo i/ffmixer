@@ -144,7 +144,7 @@
   {:else}
     {@const s = settings}
     {#if !live}
-      <p class="note">Shown as the unit holds them. Go live to change them.</p>
+      <p class="note">Shown as the unit holds them. Reconnect to change them.</p>
     {/if}
 
     {#if pending}

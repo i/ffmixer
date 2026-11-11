@@ -1,9 +1,9 @@
 <!--
-  Fixed right-hand Control Strip (manual §25.5), plus the switch that
-  starts and stops sending edits to the unit. It is off at every launch.
+  Fixed right-hand Control Strip (manual §25.5). Shows whether changes
+  are being sent to the unit and offers to reconnect if they are not.
 -->
 <script lang="ts">
-  import { reloadFromUnit, send, session, setLive } from '../lib/backend.svelte'
+  import { reconnect, send, session } from '../lib/backend.svelte'
   import { viewOptions } from '../lib/viewOptions.svelte'
   import type { ViewState } from '../lib/types'
   import DeviceSettings from './DeviceSettings.svelte'
@@ -14,70 +14,53 @@
 
   let { view }: Props = $props()
 
-  /** Waiting on go-live or reload (about a second of D-Bus reads). */
+  /** Waiting on a reconnect (about a second of D-Bus reads). */
   let busy = $state(false)
-  /** Asking whether to send edits made while read-only. */
-  let confirming = $state(false)
 
   const modeLabel = $derived(
-    view.live ? 'Live' : { loading: 'Loading…', hardware: 'Read-only', demo: 'Demo' }[view.mode],
+    view.live ? 'Live' : { loading: 'Loading…', hardware: 'Offline', demo: 'Demo' }[view.mode],
   )
   const pending = $derived(view.pendingChanges ?? 0)
 
-  async function run(task: () => Promise<void>): Promise<void> {
+  async function tryReconnect(): Promise<void> {
     busy = true
-    confirming = false
     try {
-      await task()
+      await reconnect()
     } finally {
       busy = false
     }
-  }
-
-  function goLive(): void {
-    if (pending > 0) confirming = true
-    else void run(() => setLive(true))
   }
 </script>
 
 <aside class="control-strip" aria-label="Control strip">
   <div class="device">
-    <div class="device-name">Fireface 800</div>
+    <div class="device-head">
+      <div class="device-name">Fireface 800</div>
+      <div class="badge" data-mode={view.live ? 'live' : view.mode}>{modeLabel}</div>
+    </div>
     <div class="device-id">{view.device}</div>
-    <div class="badge" data-mode={view.live ? 'live' : view.mode}>{modeLabel}</div>
   </div>
 
   <p class="status">{view.status}</p>
 
   {#if view.mode === 'hardware'}
-    <div class="sync" role="group" aria-label="Send to unit">
+    <div class="sync" role="group" aria-label="Connection to the unit">
       {#if view.live}
         <p class="pending" aria-live="polite">
           {pending === 0 ? 'In sync with unit' : `Sending ${pending} changes…`}
         </p>
-        <button class="toggle wide live" aria-pressed="true" disabled={busy} onclick={() => run(() => setLive(false))}>
-          Stop sending
-        </button>
-      {:else if confirming}
-        <p class="pending">Send {pending} changes made while read-only?</p>
-        <button class="toggle wide" onclick={() => run(() => setLive(true))}>Send them</button>
-        <button class="toggle wide" onclick={() => run(async () => {
-          await reloadFromUnit()
-          await setLive(true)
-        })}>Reload from unit, then go live</button>
-        <button class="toggle wide" onclick={() => (confirming = false)}>Cancel</button>
       {:else}
-        <p class="pending" title="Crosspoints that differ from the unit">
-          {pending === 0 ? 'In sync with unit' : `${pending} unsent changes`}
+        <p class="pending">
+          {pending === 0 ? 'Not sending' : `${pending} changes not sent`}
         </p>
-        <button class="toggle wide" disabled={busy} onclick={goLive}>
-          {busy ? 'Connecting…' : 'Go live'}
+        <button
+          class="toggle wide"
+          title="Read the unit again and start sending. Changes not sent are discarded."
+          disabled={busy}
+          onclick={tryReconnect}
+        >
+          {busy ? 'Connecting…' : 'Reconnect'}
         </button>
-        {#if pending > 0}
-          <button class="toggle wide" disabled={busy} onclick={() => run(reloadFromUnit)}>
-            Reload from unit
-          </button>
-        {/if}
       {/if}
     </div>
   {/if}
@@ -152,6 +135,12 @@
     border-radius: 4px;
     padding: 6px 8px;
   }
+  .device-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
   .device-name {
     font-size: 12px;
     color: var(--text);
@@ -165,10 +154,13 @@
     text-overflow: ellipsis;
   }
   .badge {
-    display: inline-block;
-    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    height: 15px;
+    padding: 0 7px;
     font-size: 10px;
-    padding: 1px 6px;
+    line-height: 1;
     border-radius: 8px;
     color: #111;
     background: #8fa0b0;
@@ -190,10 +182,6 @@
   }
   .sync .toggle {
     height: 22px;
-  }
-  .toggle.live[aria-pressed='true'] {
-    color: #fff;
-    background: var(--over);
   }
   .status,
   .pending,
